@@ -163,6 +163,36 @@ namespace iniReal.Pages.CS
             string operatInput = Request.Form["OP"];
             string prodPlanInput = Request.Form["PP"];
             string idleInput = Request.Form["IT"];
+            string shiftModeInput = Request.Form["ShiftMode"];
+            string currentShiftMode;
+
+            if (shiftModeInput == "true")
+            {
+                // Mode SHIFT aktif → Deteksi shift berapa
+                DateTime now = DateTime.Now;
+                DateTime shift1Start = now.Date.AddHours(7);
+                DateTime shift1End = now.Date.AddHours(15).AddMinutes(45);
+                DateTime shift2Start = now.Date.AddHours(15).AddMinutes(45);
+                DateTime shift2End = now.Date.AddHours(23);
+                DateTime shift3Start = now.Date.AddHours(23);
+                DateTime shift3End = now.Date.AddDays(1).AddHours(7);
+                DateTime shift3Start2 = now.Date.AddDays(-1).AddHours(23);
+                DateTime shift3End2 = now.Date.AddHours(7);
+
+                if (now >= shift1Start && now < shift1End)
+                    currentShiftMode = "SHIFT 1";
+                else if (now >= shift2Start && now < shift2End)
+                    currentShiftMode = "SHIFT 2";
+                else if ((now >= shift3Start && now < shift3End) || (now >= shift3Start2 && now < shift3End2))
+                    currentShiftMode = "SHIFT 3";
+                else
+                    currentShiftMode = "SHIFT"; // Fallback kalau di luar jam shift
+            }
+            else
+            {
+                // Mode OVERTIME
+                currentShiftMode = "OVERTIME";
+            }
 
             if (!string.IsNullOrEmpty(serialNumInput) && serialNumInput.Contains("ERROR"))
             {
@@ -325,9 +355,9 @@ namespace iniReal.Pages.CS
                     }
 
                     string insertUserQrSql = @"INSERT INTO OEESN (Date, SDate, EndDate, ProductTime, TotalDownTime, TargetUnit, GoodUnit, EjectUnit, TotalUnit, OEE, 
-                                   Availability, Performance, Quality, CycleTime, MachineCode, Product_Id, NoOfOperator, P_Target, P_Actual, IdleTime, SN_GOOD) 
-                                   VALUES (@Date, @SDate, @EndDate, @ProductTime, @TotalDownTime, @TargetUnit, @GoodUnit, @EjectUnit, (@GoodUnit + @EjectUnit), @OEE, 
-                                   @Availability, @Performance, @Quality, @CycleTime, @MachineCode, @Product_Id, @NoOfOperator, @P_Target, @P_Actual, @IdleTime, @SN_GOOD);";
+                       Availability, Performance, Quality, CycleTime, MachineCode, Product_Id, NoOfOperator, P_Target, P_Actual, IdleTime, SN_GOOD, ShiftMode) 
+                       VALUES (@Date, @SDate, @EndDate, @ProductTime, @TotalDownTime, @TargetUnit, @GoodUnit, @EjectUnit, (@GoodUnit + @EjectUnit), @OEE, 
+                       @Availability, @Performance, @Quality, @CycleTime, @MachineCode, @Product_Id, @NoOfOperator, @P_Target, @P_Actual, @IdleTime, @SN_GOOD, @ShiftMode);";
 
                     using (SqlCommand insertUserQrCommand = new SqlCommand(insertUserQrSql, connection))
                     {
@@ -371,6 +401,7 @@ namespace iniReal.Pages.CS
                         insertUserQrCommand.Parameters.AddWithValue("@P_Actual", p_actual);
                         insertUserQrCommand.Parameters.AddWithValue("@IdleTime", idleValue);
                         insertUserQrCommand.Parameters.AddWithValue("@SN_GOOD", iniUser.SN_GOOD);
+                        insertUserQrCommand.Parameters.AddWithValue("@ShiftMode", currentShiftMode);
 
                         await insertUserQrCommand.ExecuteNonQueryAsync();
                     }

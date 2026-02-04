@@ -151,7 +151,7 @@
             <label class="col-sm-3 col-form-label" style="width:200px">Mode Shift : </label>
             <div class="col-sm-3 mt-2">
                 <label class="slider-switch">
-                    <input type="checkbox" id="switchButtoncs" @(shift == 1 ? "checked" : "") onchange="toggleSwitchCS()">
+                  <input type="checkbox" id="switchButtoncs" onchange="toggleSwitchCS()">
                     <span class="slider round"></span>
                 </label>
             </div>
@@ -186,6 +186,7 @@
 
 <input type="number" class="form-control" name="TU" id="targInput" value="@Model.iniUser.TargetUnit" form="myForm" style="font-size:28px; display:none" />
 <input type="hidden" class="form-control" name="IT" id="idleInput" value="@Model.iniUser.IdleTime" form="myForm" style="font-size:28px; display:none " />
+<input type="hidden" id="shiftModeInput" name="ShiftMode" value="false" form="myForm" />
 
 @if (currentRecord != null)
 {
@@ -394,6 +395,7 @@ else
                     if (switchStatecs !== null) {
                         switchButtoncs.checked = JSON.parse(switchStatecs);
                     }
+                        toggleSwitchCS();
 
                     var opValue = localStorage.getItem("opValuecs");
                     if (opValue !== null) {
@@ -651,6 +653,31 @@ else
                 //     intVal = parseInt(localStorage.getItem("intVal")) || 0;
                 //     updateIntValDisplay();
 
+                    function toggleSwitchCS() {
+        var switchButtoncs = document.getElementById("switchButtoncs");
+        var labelcs = document.getElementById("counterlabelcs");
+        var valuecs = document.getElementById("countervaluecs");
+        var shiftModeInput = document.getElementById("shiftModeInput");
+
+        // Update hidden input value
+        if (shiftModeInput) {
+            shiftModeInput.value = switchButtoncs.checked;
+        }
+
+        if (switchButtoncs.checked) {
+            // MODE SHIFT AKTIF
+            labelcs.textContent = "Shift @shift Total Product : ";
+            valuecs.textContent = "@recordCountCurrentShift";
+        } else {
+            // MODE OVERTIME AKTIF
+            labelcs.textContent = "Overtime - Total Product : ";
+            valuecs.textContent = "@latestTotalUnit";
+        }
+
+        localStorage.setItem("switchStatecs", switchButtoncs.checked);
+    }
+
                 });
+
             </script>
     }
