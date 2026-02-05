@@ -243,12 +243,12 @@ namespace iniReal.Pages.CS
                     string selectDataSql = @"
         SELECT TOP 1 Product_Id, MachineCode, SUT FROM Masterdata
         WHERE MachineCode = @MachineCode AND
-              (Product_Id LIKE @EmbeddedPrefix + '%' OR -- Logika Baru
+              (
                Product_Id LIKE @SerialNumPrefix7 + '%' OR
                Product_Id LIKE @SerialNumPrefix5 + '%' OR
                Product_Id = @SerialNumPrefix3)
         ORDER BY CASE
-            WHEN Product_Id LIKE @EmbeddedPrefix + '%' THEN 1 -- Prioritas Utama
+          
             WHEN Product_Id LIKE @SerialNumPrefix7 + '%' THEN 2
             WHEN Product_Id LIKE @SerialNumPrefix5 + '%' THEN 3
             WHEN Product_Id = @SerialNumPrefix3 THEN 4
@@ -262,14 +262,14 @@ namespace iniReal.Pages.CS
 
                         // LOGIKA BARU: Ambil karakter ke-7 sampai 11 (index 6, panjang 5)
                         // Contoh: 140202BFDCW7225CD000002 => Ambil "BFDCW"
-                        string embeddedPrefix = "";
-                        if (serialNum.Length >= 11)
-                        {
-                            embeddedPrefix = serialNum.Substring(6, 5);
-                        }
+                        //string embeddedPrefix = "";
+                        //if (serialNum.Length >= 11)
+                        //{
+                        //    embeddedPrefix = serialNum.Substring(6, 5);
+                        //}
 
                         selectDataCommand.Parameters.AddWithValue("@MachineCode", MachineCode);
-                        selectDataCommand.Parameters.AddWithValue("@EmbeddedPrefix", embeddedPrefix); // Parameter Baru
+                        //selectDataCommand.Parameters.AddWithValue("@EmbeddedPrefix", embeddedPrefix); // Parameter Baru
                         selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix7", serialNum.Length >= 7 ? serialNum.Substring(0, 7) : serialNum);
                         selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix5", serialNum.Length >= 5 ? serialNum.Substring(0, 5) : serialNum);
                         selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix3", serialNum.Length >= 3 ? serialNum.Substring(0, 3) : serialNum);

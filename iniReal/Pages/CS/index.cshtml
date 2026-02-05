@@ -135,6 +135,7 @@
 <div class="row d-flex justify-content-between">
     <div class="col-md-3" style="width:49%">
         <form method="post" id="myForm">
+            <input type="hidden" id="shiftModeInput" name="ShiftMode" value="false" />
             <div class="row mt-2 mb-2" style="font-size: 28px; font-weight:500">
                 <label class="col-sm-3 col-form-label" style="width:300px">Scan Serial Number :</label>
                 <div class="col-sm-3 align-self-center">
@@ -186,7 +187,7 @@
 
 <input type="number" class="form-control" name="TU" id="targInput" value="@Model.iniUser.TargetUnit" form="myForm" style="font-size:28px; display:none" />
 <input type="hidden" class="form-control" name="IT" id="idleInput" value="@Model.iniUser.IdleTime" form="myForm" style="font-size:28px; display:none " />
-<input type="hidden" id="shiftModeInput" name="ShiftMode" value="false" form="myForm" />
+@* <input type="hidden" id="shiftModeInput" name="ShiftMode" value="false" form="myForm" /> *@
 
 @if (currentRecord != null)
 {
@@ -347,6 +348,38 @@ else
                 var prodpl = 0;
                 var intVal = 0;
                 var intervalId;
+                            function toggleSwitchCS() {
+                                // 1. Ambil semua elemen yang dibutuhkan
+                                var switchButtoncs = document.getElementById("switchButtoncs");
+                                var labelcs = document.getElementById("counterlabelcs");
+                                var valuecs = document.getElementById("countervaluecs");
+
+                                // Ini adalah elemen Hidden Input yang ada di dalam FORM
+                                var hiddenInputElement = document.getElementById("shiftModeInput");
+
+                                // 2. LOGIKA SINKRONISASI (Kunci agar Backend menerima data "true")
+                                if (hiddenInputElement) {
+                                    // Jika checkbox dicentang, value input jadi "true", jika tidak jadi "false"
+                                    hiddenInputElement.value = switchButtoncs.checked ? "true" : "false";
+
+                                    // Console log ini untuk pembuktian di F12 (Inspect)
+                                    console.log("Nilai yang akan dikirim ke Backend: ", hiddenInputElement.value);
+                                }
+
+                                // 3. LOGIKA TAMPILAN (UI)
+                                if (switchButtoncs.checked) {
+                                    // MODE SHIFT AKTIF
+                                    if (labelcs) labelcs.textContent = "Shift @shift Total Product : ";
+                                    if (valuecs) valuecs.textContent = "@recordCountCurrentShift";
+                                } else {
+                                    // MODE OVERTIME AKTIF
+                                    if (labelcs) labelcs.textContent = "Overtime - Total Product : ";
+                                    if (valuecs) valuecs.textContent = "@latestTotalUnit";
+                                }
+
+                                // 4. Simpan status ke LocalStorage
+                                localStorage.setItem("switchStatecs", switchButtoncs.checked);
+                            }
                 document.addEventListener("DOMContentLoaded", function () {
                     var opInput = document.getElementById("opInput");
                     var prodInput = document.getElementById("prodInput");
@@ -394,8 +427,11 @@ else
                     var switchStatecs = localStorage.getItem("switchStatecs");
                     if (switchStatecs !== null) {
                         switchButtoncs.checked = JSON.parse(switchStatecs);
-                    }
                         toggleSwitchCS();
+                    } else {
+                        toggleSwitchCS();
+                    }
+                        
 
                     var opValue = localStorage.getItem("opValuecs");
                     if (opValue !== null) {
@@ -653,29 +689,30 @@ else
                 //     intVal = parseInt(localStorage.getItem("intVal")) || 0;
                 //     updateIntValDisplay();
 
-                    function toggleSwitchCS() {
-        var switchButtoncs = document.getElementById("switchButtoncs");
-        var labelcs = document.getElementById("counterlabelcs");
-        var valuecs = document.getElementById("countervaluecs");
-        var shiftModeInput = document.getElementById("shiftModeInput");
+                    // function toggleSwitchCS() {
+                    //         var switchButtoncs = document.getElementById("switchButtoncs");
+                    //         var labelcs = document.getElementById("counterlabelcs");
+                    //         var valuecs = document.getElementById("countervaluecs");
+                    //         var shiftModeInput = document.getElementById("shiftModeInput");
 
-        // Update hidden input value
-        if (shiftModeInput) {
-            shiftModeInput.value = switchButtoncs.checked;
-        }
+                    //         // Update hidden input value
+                    //         if (shiftModeInput) {
+                    //             shiftModeInput.value = switchButtoncs.checked;
+                    //         }
 
-        if (switchButtoncs.checked) {
-            // MODE SHIFT AKTIF
-            labelcs.textContent = "Shift @shift Total Product : ";
-            valuecs.textContent = "@recordCountCurrentShift";
-        } else {
-            // MODE OVERTIME AKTIF
-            labelcs.textContent = "Overtime - Total Product : ";
-            valuecs.textContent = "@latestTotalUnit";
-        }
+                    //         if (switchButtoncs.checked) {
+                    //             // MODE SHIFT AKTIF
+                    //             labelcs.textContent = "Shift @shift Total Product : ";
+                    //             valuecs.textContent = "@recordCountCurrentShift";
+                    //         } else {
+                    //             // MODE OVERTIME AKTIF
+                    //             labelcs.textContent = "Overtime - Total Product : ";
+                    //             valuecs.textContent = "@latestTotalUnit";
+                    //         }
 
-        localStorage.setItem("switchStatecs", switchButtoncs.checked);
-    }
+                    //         localStorage.setItem("switchStatecs", switchButtoncs.checked);
+                    //  }
+                       
 
                 });
 
