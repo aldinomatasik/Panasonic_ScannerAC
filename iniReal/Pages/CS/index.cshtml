@@ -1,6 +1,8 @@
 ﻿@page
 @model IndexModel
 @{
+    DateTime nsStart = DateTime.Now.Date.AddHours(7);
+    DateTime nsEnd = DateTime.Now.Date.AddHours(16);
     DateTime shift1Start = DateTime.Now.Date.AddHours(7);
     DateTime shift1End = DateTime.Now.Date.AddHours(15).AddMinutes(45);
     DateTime shift2Start = DateTime.Now.Date.AddHours(15).AddMinutes(45);
@@ -20,6 +22,7 @@
     var previousRecord = orderedRecords.Skip(1).FirstOrDefault();
     var firstRecordToday = Model.listUsers.FirstOrDefault(u => u.MachineCode == "MCH1-02" && u.SDate.Date == currentDate);
     int recordCountCurrentShift = 0;
+    int recordCountNS = 0;
 
     if (currentRecord != null)
     {
@@ -29,6 +32,12 @@
     else
     {
         idletime = 0;
+    }
+
+    // Hitungan Non-Shift (07:00 - 16:00)
+    if (DateTime.Now >= nsStart && DateTime.Now < nsEnd)
+    {
+        recordCountNS = Model.listUsers.Count(u => u.SDate >= nsStart && u.SDate < nsEnd && u.MachineCode == "MCH1-02");
     }
 
     if (DateTime.Now >= shift1Start && DateTime.Now < shift1End)
@@ -41,7 +50,7 @@
         shift = 2;
         recordCountCurrentShift = Model.listUsers.Count(u => u.SDate >= shift2Start && u.SDate < shift2End && u.MachineCode == "MCH1-02");
     }
-    else if ((DateTime.Now >= shift3Start && DateTime.Now < shift3End) || (DateTime.Now >= shift3Start2 && DateTime.Now < shift3End))
+    else if ((DateTime.Now >= shift3Start && DateTime.Now < shift3End) || (DateTime.Now >= shift3Start2 && DateTime.Now < shift3End2))
     {
         shift = 3;
         recordCountCurrentShift = Model.listUsers.Count(u => (((u.SDate >= shift3Start && u.SDate < shift3End) || (u.SDate >= shift3Start2 && u.SDate < shift3End2)) && u.MachineCode == "MCH1-02"));
@@ -75,30 +84,30 @@
             <label class="col-sm-3 col-form-label" style="font-size:20px; font-weight:600; color: white">Machine :</label>
             @if (Model.listUsers.Count > 0 && currentRecord != null)
             {
-                    <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
-                        <span style="font-size:20px;">CS Assembly</span>
-                    </div>
+                <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
+                    <span style="font-size:20px;">CS Assembly</span>
+                </div>
             }
             else
             {
-                    <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
-                        <span style="font-size:20px;"></span>
-                    </div>
+                <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
+                    <span style="font-size:20px;"></span>
+                </div>
             }
         </div>
         <div class="row m-2">
             <label class="col-sm-3 col-form-label" style="font-size:20px; font-weight:600; color: white">Model :</label>
             @if (Model.listUsers.Count > 0 && currentRecord != null)
             {
-                    <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
-                        <span style="font-size:20px;">@GetMachineName(currentRecord.Product_Id)</span>
-                    </div>
+                <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
+                    <span style="font-size:20px;">@GetMachineName(currentRecord.Product_Id)</span>
+                </div>
             }
             else
             {
-                    <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
-                        <span style="font-size:20px;"></span>
-                    </div>
+                <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
+                    <span style="font-size:20px;"></span>
+                </div>
             }
         </div>
     </div>
@@ -112,14 +121,6 @@
 
             var latestTotalUnit = lastRecordForMachine != null ? (int)lastRecordForMachine.TotalUnit : 0;
         }
-
-        @* @{
-            var recordCountToday = 0;
-            if (currentRecord != null && previousRecord != null && currentRecord.Product_Id == previousRecord.Product_Id)
-            {
-                recordCountToday = Model.listUsers.Count(u => (u.Date.Date == DateTime.Now.Date && u.MachineCode == "MCH1-01" && u.Product_Id == currentRecord.Product_Id));
-            }
-        } *@
 
         <div class="row m-2 text-end align-self-center">
             <div class="col-sm-6 align-self-center">
@@ -135,27 +136,19 @@
 <div class="row d-flex justify-content-between">
     <div class="col-md-3" style="width:49%">
         <form method="post" id="myForm">
-            <input type="hidden" id="shiftModeInput" name="ShiftMode" value="false" />
+            <input type="hidden" id="shiftModeInput" name="ShiftMode" value="" />
             <div class="row mt-2 mb-2" style="font-size: 28px; font-weight:500">
                 <label class="col-sm-3 col-form-label" style="width:300px">Scan Serial Number :</label>
                 <div class="col-sm-3 align-self-center">
-                    <input type="text" class="form-control" id="serialNum"  name="SerialNum" value="@Model.iniUser.SN_GOOD" id="serial-number-input" form="myForm" autofocus style="font-size:28px; width:270px" />
+                    <input type="text" class="form-control" id="serialNum" name="SerialNum" value="@Model.iniUser.SN_GOOD" form="myForm" autofocus style="font-size:28px; width:270px" />
                 </div>
             </div>
-            @* <input type="number" class="form-control" name="OP" id="opInputValue" form="myForm"/>
-            <input type="number" class="form-control d-none" name="PP" id="prodInputValue" form="myForm" /> *@
         </form>
     </div>
 
     <div class="col-md-3" style="width:49%">
-        <div class="row mt-2 mb-2 align-items-center justify-content-center" style="font-size: 28px; font-weight:500">
-            <label class="col-sm-3 col-form-label" style="width:200px">Mode Shift : </label>
-            <div class="col-sm-3 mt-2">
-                <label class="slider-switch">
-                  <input type="checkbox" id="switchButtoncs" onchange="toggleSwitchCS()">
-                    <span class="slider round"></span>
-                </label>
-            </div>
+        <div class="row mt-2 mb-2 align-items-center justify-content-center" style="font-size: 20px; font-weight:600">
+            <label class="col-sm-6 col-form-label text-end" style="width:220px" id="currentPeriodLabel">Periode : -</label>
         </div>
     </div>
 
@@ -172,7 +165,7 @@
                 <div>
                     <label class="col col-form-label" style="font-weight:bold;">Masukkan Jumlah Operator!!</label>
                 </div>
-                    <input type="number" class="form-control" name="OP" id="opInput" value="@Model.iniUser.NoOfOperator" form="myForm" style="font-size:28px;" />
+                <input type="number" class="form-control" name="OP" id="opInput" value="@Model.iniUser.NoOfOperator" form="myForm" style="font-size:28px;" />
                 <div>
                     <label class="col col-form-label" style="font-weight:bold;">Masukkan Jumlah Production Plan!!</label>
                 </div>
@@ -185,55 +178,112 @@
     </div>
 </div>
 
+<!-- ============================================================ -->
+<!-- Modal Pilih Shift/Periode - muncul otomatis saat page dibuka -->
+<!-- dan setiap kali periode sebelumnya sudah berakhir             -->
+<!-- ============================================================ -->
+<div class="modal fade" id="ShiftSelectModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="ShiftSelectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color:#180D2F; color:#FFAE11;">
+                <h5 class="modal-title" id="ShiftSelectModalLabel">Pilih Shift Kerja</h5>
+            </div>
+            <div class="modal-body">
+                <p class="text-center mb-3" style="font-size:16px;">Silakan pilih periode kerja Anda saat ini:</p>
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary shift-select-btn" data-shift="NS" style="font-size:18px; padding:12px;">
+                        Non-Shift
+                    </button>
+                    <button type="button" class="btn btn-outline-primary shift-select-btn" data-shift="1" style="font-size:18px; padding:12px;">
+                        Shift 1
+                    </button>
+                    <button type="button" class="btn btn-outline-primary shift-select-btn" data-shift="2" style="font-size:18px; padding:12px;">
+                        Shift 2
+                    </button>
+                    <button type="button" class="btn btn-outline-primary shift-select-btn" data-shift="3" style="font-size:18px; padding:12px;">
+                        Shift 3
+                    </button>
+                </div>
+                <p class="text-center text-muted mt-3 mb-0" style="font-size:13px;">
+                    Jika Anda memilih shift di luar jam operasionalnya, data otomatis akan dicatat sebagai <strong>Overtime</strong>.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Modal Konfirmasi Akhir Periode - muncul saat periode berakhir -->
+<!-- atau saat tombol submit manual (overtime) dipencet             -->
+<!-- ============================================================ -->
+<div class="modal fade" id="ShiftEndModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="ShiftEndModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color:#180D2F; color:#FFAE11;">
+                <h5 class="modal-title" id="ShiftEndModalLabel">Konfirmasi Akhir Periode</h5>
+            </div>
+            <div class="modal-body">
+                <p>Pastikan Total Produksi berikut sudah <strong>benar</strong> sebelum lanjut ke periode berikutnya:</p>
+                <div class="text-center mb-3">
+                    <div style="font-size:16px; color:#555;" id="shiftEndPeriodLabel">-</div>
+                    <span style="font-size:38px; font-weight:bold; color:#180D2F;" id="shiftEndTotalDisplay">0</span>
+                </div>
+                <div class="d-flex w-100 justify-content-end">
+                    <button type="button" id="confirmShiftEndBtn" class="btn btn-primary">Submit &amp; Pilih Periode Baru</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <input type="number" class="form-control" name="TU" id="targInput" value="@Model.iniUser.TargetUnit" form="myForm" style="font-size:28px; display:none" />
 <input type="hidden" class="form-control" name="IT" id="idleInput" value="@Model.iniUser.IdleTime" form="myForm" style="font-size:28px; display:none " />
-@* <input type="hidden" id="shiftModeInput" name="ShiftMode" value="false" form="myForm" /> *@
 
 @if (currentRecord != null)
 {
-        <div class="row" style="font-size: 28px; font-weight:500">
-            <div class="col-sm-3">
-                <label>Current Record :</label>
-            </div>
-            <div class="col-sm-3">
-                <span id="currentRecordValue">@currentRecord.SN_GOOD</span>
-            </div>
+    <div class="row" style="font-size: 28px; font-weight:500">
+        <div class="col-sm-3">
+            <label>Current Record :</label>
         </div>
+        <div class="col-sm-3">
+            <span id="currentRecordValue">@currentRecord.SN_GOOD</span>
+        </div>
+    </div>
 }
 else
 {
-        <div class="row" style="font-size: 28px; font-weight:500">
-            <div class="col-sm-3">
-                <label>Current Record :</label>
-            </div>
-            <div class="col-sm-3">
-                <span id="currentRecordValue">No current record found.</span>
-            </div>
+    <div class="row" style="font-size: 28px; font-weight:500">
+        <div class="col-sm-3">
+            <label>Current Record :</label>
         </div>
+        <div class="col-sm-3">
+            <span id="currentRecordValue">No current record found.</span>
+        </div>
+    </div>
 }
 
 @if (previousRecord != null)
 {
 
-        <div class="row" style="font-size: 28px; font-weight:500">
-            <div class="col-sm-3">
-                <label>Previous Record :</label>
-            </div>
-            <div class="col-sm-3">
-                <span>@previousRecord.SN_GOOD</span>
-            </div>
+    <div class="row" style="font-size: 28px; font-weight:500">
+        <div class="col-sm-3">
+            <label>Previous Record :</label>
         </div>
+        <div class="col-sm-3">
+            <span>@previousRecord.SN_GOOD</span>
+        </div>
+    </div>
 }
 else
 {
-        <div class="row" style="font-size: 28px; font-weight:500">
-            <div class="col-sm-3">
-                <label>Previous Record :</label>
-            </div>
-            <div class="col-sm-3">
-                <span>No previous record found.</span>
-            </div>
+    <div class="row" style="font-size: 28px; font-weight:500">
+        <div class="col-sm-3">
+            <label>Previous Record :</label>
         </div>
+        <div class="col-sm-3">
+            <span>No previous record found.</span>
+        </div>
+    </div>
 }
 
 <div class="row" style="font-size: 28px; font-weight:500; display:none">
@@ -260,10 +310,22 @@ else
 
 @if (!string.IsNullOrEmpty(Model.errorMessage))
 {
-        <div class="alert alert-dismissible fade show d-flex justify-content-center align-items-center" style="background-color:black">
-            <strong style="font-size:20px; color:red">@Model.errorMessage</strong>
-        </div>
+    bool isDuplicate = Model.errorMessage.Contains("DUPLIKAT");
+    <div class="alert alert-dismissible fade show d-flex justify-content-center align-items-center"
+         style="background-color:black; @(isDuplicate ? "border: 3px solid red;" : "")">
+        <strong style="font-size:@(isDuplicate ? "26px" : "20px"); color:red; @(isDuplicate ? "animation: blink 0.8s step-start infinite;" : "")">
+            @Model.errorMessage
+        </strong>
+    </div>
 }
+
+<style>
+    @@keyframes blink {
+        50% {
+            opacity: 0;
+        }
+    }
+</style>
 
 
 <div>
@@ -280,441 +342,281 @@ else
         <tbody>
             @foreach (var item in Model.listUsers.Where(u => (u.SDate.Date == DateTime.Now.Date && u.MachineCode == "MCH1-02")).OrderByDescending(u => u.SDate).Take(5))
             {
-                    <tr style="font-weight:bold">
-                        <td>@item.Date.ToShortDateString()</td>
-                        <td>@item.SDate.ToString("HH:mm:ss").Replace('.', ':')</td>
-                        <td>CS Assembly</td>
-                        <td>@GetMachineName(item.Product_Id)</td>
-                        <td>@item.SN_GOOD</td>
-                    </tr>
+                <tr style="font-weight:bold">
+                    <td>@item.Date.ToShortDateString()</td>
+                    <td>@item.SDate.ToString("HH:mm:ss").Replace('.', ':')</td>
+                    <td>CS Assembly</td>
+                    <td>@GetMachineName(item.Product_Id)</td>
+                    <td>@item.SN_GOOD</td>
+                </tr>
             }
         </tbody>
     </table>
 </div>
 
+<!-- ============================================================ -->
+<!-- Tombol submit manual - dipakai khusus untuk kondisi Overtime  -->
+<!-- karena jam berakhirnya tidak pasti / tidak terjadwal           -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-end mt-3 mb-4">
+    <button type="button" id="manualShiftSubmitBtn" class="btn btn-success" style="font-size:18px; font-weight:600;">
+        Akhiri Periode / Submit (untuk Overtime)
+    </button>
+</div>
+
 <component type="typeof(LossTimeModal)" render-mode="ServerPrerendered" />
 
-@* IN DEVELOPMENT *@
-@*<div class="modal fade" id="LossTime" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="LossTime" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl">
-        <div class="modal-content p-4">
-            <div class="modal-header">
-                <h2 class="fs-4 fw-bold">Loss Time</h2>
-            </div>
-            <div class="modal-body">
-                <h4 class="mb-4 text-center">There is Loss Time in Production, What is the reason?</h4>
-
-                <form method="post" asp-page-handler="SaveLossTime">
-                    <input type="hidden" name="LossTimeReason" id="LossTimeReasonInput" />
-
-                    <div class="d-flex gap-3 justify-content-center mb-2">
-                        <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Change Model">
-                            <h2 class="text-center p-4 fw-bold">Change Model</h2>
-                        </button>
-                        <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Material Shortage External">
-                            <h2 class="text-center p-4 fw-bold">Material Shortage External</h2>
-                        </button>
-                        <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="MP Adjustment">
-                            <h2 class="text-center p-4 fw-bold">MP Adjustment</h2>
-                        </button>
-                        <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Material Shortage Internal">
-                            <h2 class="text-center p-4 fw-bold">Material Shortage Internal</h2>
-                        </button>
-                    </div>
-                    <div class="d-flex gap-3 justify-content-center">
-                        <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Material Shortage Inhouse">
-                            <h2 class="text-center p-4 fw-bold">Material Shortage Inhouse</h2>
-                        </button>
-                        <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Quality Trouble">
-                            <h2 class="text-center p-4 fw-bold">Quality Trouble</h2>
-                        </button>
-                        <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Machine Trouble">
-                            <h2 class="text-center p-4 fw-bold">Machine Trouble</h2>
-                        </button>
-                        <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Rework">
-                            <h2 class="text-center p-4 fw-bold">Rework</h2>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>*@
-@* IN DEVELOPMENT - Batas Development *@
 @section Scripts {
-            <script>
-                // Declare 'operat' variable' and initialize it with 0
-                var operat = 0;
-                var prodpl = 0;
-                var intVal = 0;
-                var intervalId;
-                            function toggleSwitchCS() {
-                                // 1. Ambil semua elemen yang dibutuhkan
-                                var switchButtoncs = document.getElementById("switchButtoncs");
-                                var labelcs = document.getElementById("counterlabelcs");
-                                var valuecs = document.getElementById("countervaluecs");
+    <script>
+        // Declare 'operat' variable' and initialize it with 0
+        var operat = 0;
+        var prodpl = 0;
+        var intVal = 0;
+        var intervalId;
 
-                                // Ini adalah elemen Hidden Input yang ada di dalam FORM
-                                var hiddenInputElement = document.getElementById("shiftModeInput");
+        // ===================== SHIFT/PERIODE (popup based) =====================
+        var shiftLabels = { "NS": "Non-Shift", "1": "Shift 1", "2": "Shift 2", "3": "Shift 3" };
 
-                                // 2. LOGIKA SINKRONISASI (Kunci agar Backend menerima data "true")
-                                if (hiddenInputElement) {
-                                    // Jika checkbox dicentang, value input jadi "true", jika tidak jadi "false"
-                                    hiddenInputElement.value = switchButtoncs.checked ? "true" : "false";
+        function getShiftWindow(shiftCode) {
+            var now = new Date();
+            var d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-                                    // Console log ini untuk pembuktian di F12 (Inspect)
-                                    console.log("Nilai yang akan dikirim ke Backend: ", hiddenInputElement.value);
-                                }
+            if (shiftCode === "NS") {
+                var s = new Date(d); s.setHours(7, 0, 0, 0);
+                var e = new Date(d); e.setHours(16, 0, 0, 0);
+                return { start: s.getTime(), end: e.getTime() };
+            }
+            if (shiftCode === "1") {
+                var s = new Date(d); s.setHours(7, 0, 0, 0);
+                var e = new Date(d); e.setHours(15, 45, 0, 0);
+                return { start: s.getTime(), end: e.getTime() };
+            }
+            if (shiftCode === "2") {
+                var s = new Date(d); s.setHours(15, 45, 0, 0);
+                var e = new Date(d); e.setHours(23, 0, 0, 0);
+                return { start: s.getTime(), end: e.getTime() };
+            }
+            if (shiftCode === "3") {
+                var s1 = new Date(d); s1.setHours(23, 0, 0, 0);
+                var e1 = new Date(d); e1.setDate(e1.getDate() + 1); e1.setHours(7, 0, 0, 0);
+                var s2 = new Date(d); s2.setDate(s2.getDate() - 1); s2.setHours(23, 0, 0, 0);
+                var e2 = new Date(d); e2.setHours(7, 0, 0, 0);
+                var nowT = now.getTime();
+                if (nowT >= s1.getTime()) {
+                    return { start: s1.getTime(), end: e1.getTime() };
+                }
+                return { start: s2.getTime(), end: e2.getTime() };
+            }
+            return { start: 0, end: 0 };
+        }
 
-                                // 3. LOGIKA TAMPILAN (UI)
-                                if (switchButtoncs.checked) {
-                                    // MODE SHIFT AKTIF
-                                    if (labelcs) labelcs.textContent = "Shift @shift Total Product : ";
-                                    if (valuecs) valuecs.textContent = "@recordCountCurrentShift";
-                                } else {
-                                    // MODE OVERTIME AKTIF
-                                    if (labelcs) labelcs.textContent = "Overtime - Total Product : ";
-                                    if (valuecs) valuecs.textContent = "@latestTotalUnit";
-                                }
+        function isWithinShiftWindow(shiftCode) {
+            var win = getShiftWindow(shiftCode);
+            var now = new Date().getTime();
+            return now >= win.start && now < win.end;
+        }
 
-                                // 4. Simpan status ke LocalStorage
-                                localStorage.setItem("switchStatecs", switchButtoncs.checked);
-                            }
-                document.addEventListener("DOMContentLoaded", function () {
-                    var opInput = document.getElementById("opInput");
-                    var prodInput = document.getElementById("prodInput");
-                    var opInputValue = document.getElementById("opInputValue");
-                    var prodInputValue = document.getElementById("prodInputValue");
+        function applyShiftSelection(shiftCode) {
+            localStorage.setItem("selectedShiftCS", shiftCode);
+            localStorage.setItem("selectedShiftDateCS", new Date().toDateString());
 
-                    setInterval(() => { 
-                        opInputValue.value = opInput.value;
-                        prodInputValue.value = prodInput;
-                    }, 500)
+            var hiddenInputElement = document.getElementById("shiftModeInput");
+            var labelcs = document.getElementById("counterlabelcs");
+            var valuecs = document.getElementById("countervaluecs");
+            var periodLabel = document.getElementById("currentPeriodLabel");
 
-                    // enter to submit
-                    const form = document.getElementById("myForm");
-                    const input = document.getElementById("serialNum");
+            hiddenInputElement.value = shiftCode;
 
-                    form.addEventListener("keydown", function (event) {
-                        if (event.key === "Enter") {
-                            event.preventDefault();
-                            form.submit();
-                        }
-                    });
+            if (isWithinShiftWindow(shiftCode)) {
+                if (shiftCode === "NS") {
+                    labelcs.textContent = "Non-Shift Total Product : ";
+                    valuecs.textContent = "@recordCountNS";
+                } else {
+                    labelcs.textContent = shiftLabels[shiftCode] + " Total Product : ";
+                    valuecs.textContent = "@recordCountCurrentShift";
+                }
+                periodLabel.textContent = "Periode : " + shiftLabels[shiftCode];
+            } else {
+                labelcs.textContent = "Overtime - Total Product : ";
+                valuecs.textContent = "@latestTotalUnit";
+                periodLabel.textContent = "Periode : Overtime (dipilih: " + shiftLabels[shiftCode] + ")";
+            }
+        }
 
-                    const close = document.getElementById('close');
-                    const closebtn = document.getElementById('CloseCSModal');
+        function showShiftSelectModal() {
+            var modal = new bootstrap.Modal(document.getElementById("ShiftSelectModal"));
+            modal.show();
+        }
 
-                    close.addEventListener('click', () => {
-                        closebtn.click();
-                    });
-                    // Load the switch state and OP value from local storage on page load
-                    var switchButtoncs = document.getElementById("switchButtoncs");
-                    var labelcs = document.getElementById("counterlabelcs");
-                    var valuecs = document.getElementById("countervaluecs");
-                    // var opInput = document.getElementById("opInput");
-                    // var prodInput = document.getElementById("prodInput");
-                    var targInput = document.getElementById("targInput");
-                    var idleInput = document.getElementById("idleInput");
+        function showShiftEndModal() {
+            var valuecs = document.getElementById("countervaluecs");
+            var labelcs = document.getElementById("counterlabelcs");
+            document.getElementById("shiftEndTotalDisplay").textContent = valuecs.textContent;
+            document.getElementById("shiftEndPeriodLabel").textContent = labelcs.textContent.replace(/:\s*$/, "");
+            var endModal = new bootstrap.Modal(document.getElementById("ShiftEndModal"));
+            endModal.show();
+        }
 
-                    var targValue = localStorage.getItem("intVal");
+        function checkShiftBoundary() {
+            var selectedShift = localStorage.getItem("selectedShiftCS");
+            if (!selectedShift) return;
+
+            if (!isWithinShiftWindow(selectedShift)) {
+                var flagKey = "shiftEndPromptedCS_" + selectedShift + "_" + new Date().toDateString();
+                if (!sessionStorage.getItem(flagKey)) {
+                    showShiftEndModal();
+                    sessionStorage.setItem(flagKey, "1");
+                }
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            var opInput = document.getElementById("opInput");
+            var prodInput = document.getElementById("prodInput");
+            var opInputValue = document.getElementById("opInputValue");
+            var prodInputValue = document.getElementById("prodInputValue");
+            setInterval(() => {
+                if (opInputValue && opInput) {
+                    opInputValue.value = opInput.value;
+                }
+                if (prodInputValue && prodInput) {
+                    prodInputValue.value = prodInput.value;
+                }
+            }, 500);
+
+            // enter to submit
+            const form = document.getElementById("myForm");
+            const input = document.getElementById("serialNum");
+
+            form.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    form.submit();
+                }
+            });
+
+            const close = document.getElementById('close');
+            const closebtn = document.getElementById('CloseCSModal');
+
+            close.addEventListener('click', () => {
+                closebtn.click();
+            });
+
+            var targInput = document.getElementById("targInput");
+            var idleInput = document.getElementById("idleInput");
+
+            var targValue = localStorage.getItem("intVal");
+            if (targValue != null) {
+                targInput.value = targValue;
+                intVal = parseInt(targValue);
+            }
+
+            var opValue = localStorage.getItem("opValuecs");
+            if (opValue !== null) {
+                opInput.value = opValue;
+                operat = parseInt(opValue);
+            }
+
+            var prodValue = localStorage.getItem("prodValuecs");
+            if (prodValue !== null) {
+                prodInput.value = prodValue;
+                prodpl = parseInt(prodValue);
+            }
+
+            updateOPDisplay(opValue);
+            updatePPDisplay(prodValue);
+
+            opInput.addEventListener("change", function () {
+                localStorage.setItem("opValuecs", opInput.value);
+                updateOPDisplay(opInput.value);
+                operat = parseInt(opInput.value);
+            });
+            prodInput.addEventListener("change", function () {
+                localStorage.setItem("prodValuecs", prodInput.value);
+                updatePPDisplay(prodInput.value);
+                prodpl = parseInt(prodInput.value);
+            });
+
+            function updateVariable() {
+                const now = new Date();
+
+                let startOfShift = new Date(now);
+                startOfShift.setHours(7, 0, 0, 0);
+
+                if (now.getHours() < 7) {
+                    startOfShift.setDate(startOfShift.getDate() - 1);
+                }
+
+                const timeDiffSeconds = Math.floor((now - startOfShift) / 1000);
+
+                const sutVal = @getSUT(currentRecord.Product_Id);
+                if (sutVal > 0) {
+                    intVal = Math.floor(timeDiffSeconds / sutVal);
+
+                    localStorage.setItem("intValcu", intVal);
+                    var targValue = localStorage.getItem("intValcu");
                     if (targValue != null) {
                         targInput.value = targValue;
-                        intVal = parseInt(targValue);
                     }
+                    updateIntValDisplay();
+                }
+            }
 
-                    //get the switch state from local storage
-                    var switchStatecs = localStorage.getItem("switchStatecs");
-                    if (switchStatecs !== null) {
-                        switchButtoncs.checked = JSON.parse(switchStatecs);
-                        toggleSwitchCS();
-                    } else {
-                        toggleSwitchCS();
-                    }
-                        
+            function updateOPDisplay(value) {
+                var opDisplay = document.getElementById("opDisplay");
+                opDisplay.textContent = value;
+            }
 
-                    var opValue = localStorage.getItem("opValuecs");
-                    if (opValue !== null) {
-                        opInput.value = opValue;
-                        // Update 'operat' variable with the initial "OP" value
-                        operat = parseInt(opValue);
-                    }
+            function updatePPDisplay(value) {
+                var prodDisplay = document.getElementById("prodDisplay");
+                prodDisplay.textContent = value;
+            }
 
-                    var prodValue = localStorage.getItem("prodValuecs");
-                    if (prodValue !== null) {
-                        prodInput.value = prodValue;
-                        prodpl = parseInt(prodValue);
-                    }
+            function updateIntValDisplay() {
+                var interDisp = document.getElementById("interDisp");
+                interDisp.textContent = intVal;
+            }
 
-                    // Update the display of OP value when the page loads
-                    updateOPDisplay(opValue);
-                    updatePPDisplay(prodValue);
-
-                    // Save the switch state and OP value to local storage and update UI when the switch is toggled
-                    switchButtoncs.addEventListener("change", function () {
-                        localStorage.setItem("switchStatecs", switchButtoncs.checked);
-                        toggleSwitchCS();
-                    });
-                    opInput.addEventListener("change", function () {
-                        localStorage.setItem("opValuecs", opInput.value);
-                        updateOPDisplay(opInput.value);
-                        // Update 'operat' variable with the new "OP" value
-                        operat = parseInt(opInput.value);
-                    });
-                    prodInput.addEventListener("change", function () {
-                        localStorage.setItem("prodValuecs", prodInput.value);
-                        updatePPDisplay(prodInput.value);
-                        prodpl = parseInt(prodInput.value);
-                    });
-                        function updateVariable() {
-                        const now = new Date();
-                        
-                        let startOfShift = new Date(now);
-                        startOfShift.setHours(7, 0, 0, 0);
-
-                        if (now.getHours() < 7) {
-                            startOfShift.setDate(startOfShift.getDate() - 1);
-                        }
-
-                        const timeDiffSeconds = Math.floor((now - startOfShift) / 1000);
-
-                        const sutVal = @getSUT(currentRecord.Product_Id);
-                        if (sutVal > 0) {
-                            intVal = Math.floor(timeDiffSeconds / sutVal);
-
-                            localStorage.setItem("intValcu", intVal);
-                            var targValue = localStorage.getItem("intValcu");
-                            if (targValue != null) {
-                                targInput.value = targValue;
-                            }
-                            updateIntValDisplay();
-                        }
-                    }
-                // var lastRecordValue = document.getElementById("currentRecordValue").innerText;
-                // var lastUpdateTime = new Date().getTime(); Waktu saat nilai terakhir berubah
-
-                // ***MULAI MODIFIKASI: Definisikan ambang batas***
-                // var SUTTime = @(currentRecord != null ? getSUT(currentRecord.Product_Id) : 0);
-                // var losstimethreshold = SUTTime > 0 ? SUTTime * 3 * 1000 : 180000; Gunakan default 3 menit jika SUT bernilai 0
-                // var twoHourThreshold = 2 * 60 * 60 * 1000; 2 jam dalam milidetik
-                // ***AKHIR MODIFIKASI***
-
-                // console.log("berjalan");
-
-
-                // ***MULAI MODIFIKASI: Fungsi checkLossTime yang diperbarui***
-                // function checkLossTime() {
-                //     var currentRecordValue = document.getElementById("currentRecordValue").innerText;
-                //     var currentTime = new Date().getTime();
-                //     var switchButton = document.getElementById("switchButtoncs");
-
-                //     Jika produk baru di-scan, reset timernya
-                //     if (currentRecordValue !== lastRecordValue) {
-                //         lastRecordValue = currentRecordValue;
-                //         lastUpdateTime = currentTime; 
-                //         return; Keluar dari fungsi setelah reset
-                //     }
-
-                //     var idleTime = currentTime - lastUpdateTime;
-                //     var isModalShown = document.getElementById('LossTime').classList.contains('show');
-
-                //     Jangan lanjutkan jika modal sudah terlihat
-                //     if (isModalShown) {
-                //         return;
-                //     }
-
-                //     Logika saat MODE SHIFT MATI
-                //     if (!switchButton.checked) {
-                //         Tampilkan modal HANYA jika waktu idle berada di antara ambang batas SUT dan 2 jam
-                //         if (idleTime > losstimethreshold && idleTime < twoHourThreshold) {
-                //             console.log("Mode Shift MATI. Waktu idle di antara ambang SUT dan 2 jam. Menampilkan modal.");
-                //             var lossTimeModal = new bootstrap.Modal(document.getElementById("LossTime"));
-                //             lossTimeModal.show();
-                //         }
-                //         Jika idleTime > twoHourThreshold, jangan lakukan apa-apa, sesuai permintaan.
-                //     }
-                //     Logika saat MODE SHIFT NYALA (logika asli)
-                //     else {
-                //         if (idleTime > losstimethreshold) {
-                //             console.log("Mode Shift NYALA. Waktu idle melebihi ambang SUT. Menampilkan modal.");
-                //             var lossTimeModal = new bootstrap.Modal(document.getElementById("LossTime"));
-                //             lossTimeModal.show();
-                //         }
-                //     }
-                // }
-                // ***AKHIR MODIFIKASI***
-
-
-                // document.querySelectorAll('.reason-btn').forEach(button => {
-                //     button.addEventListener('click', function (event) {
-                //         event.preventDefault(); Mencegah submit langsung sebelum input diisi
-                //         let reason = this.getAttribute('data-reason');
-                //         console.log("data reason sebelum :" + reason);
-                //         Masukkan alasan ke input tersembunyi
-                //         let inputField = document.getElementById('LossTimeReasonInput');
-                //         if (!inputField) {
-                //             console.error("Input LossTimeReasonInput tidak ditemukan!");
-                //             return;
-                //         }
-
-                //         inputField.value = reason;
-                //         console.log("Mengirim form dengan reason:", reason);
-                //         let form = this.closest('form');
-                //         if (!form) {
-                //             console.error("Form tidak ditemukan!");
-                //             return;
-                //         }
-
-                //         form.submit();
-                //     });
-                // });
-
-                // document.querySelectorAll(".reason-btn").forEach(button => {
-                //     button.addEventListener("click", function () {
-                //         lastUpdateTime = new Date().getTime(); Reset waktu setelah memilih alasan
-                //         var lossTimeModal = document.getElementById("LossTime");
-                //         var modalInstance = bootstrap.Modal.getInstance(lossTimeModal);
-                //         if (!modalInstance) {
-                //             modalInstance = new bootstrap.Modal(lossTimeModal);
-                //         }
-                //         modalInstance.hide();Tutup modal setelah memilih alasan
-                //         document.querySelectorAll('.modal-backdrop').forEach(el => el.remove()); Hapus backdrop yang tersisa
-                //     });
-
-                //     document.getElementById("LossTime").addEventListener("hidden.bs.modal", function () {
-                //         let serialInput = document.getElementById("serialNum");
-                //         if (serialInput) {
-                //             setTimeout(() => {
-                //                 serialInput.focus();
-                //             }, 10); Delay sedikit agar transisi modal selesai dulu
-                //         }
-                //     });
-                // });
-
-
-
-
-                //     function addIdle() {
-                //         Pastikan ada nilai yang valid untuk dikirim ke backend
-                //         idleInput.value = "@(currentRecord != null ? currentRecord.SDate.ToString("yyyy-MM-dd HH:mm:ss") : DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))";
-                //     }
-
-                //     function updateIntValDisplay() {
-                //         var interDisp = document.getElementById("interDisp");
-                //         interDisp.textContent = intVal;
-                //     }
-
-                //     Function to update the display of the OP value
-                //     function updateOPDisplay(value) {
-                //         var opDisplay = document.getElementById("opDisplay");
-                //         opDisplay.textContent = value;
-                //     }
-
-                //     function updatePPDisplay(value) {
-                //         var prodDisplay = document.getElementById("prodDisplay");
-                //         prodDisplay.textContent = value;
-                //     }
-
-                //     Function to handle the switch button behavior
-                //     function toggleSwitchCS() {
-                //         var switchButtoncs = document.getElementById("switchButtoncs");
-                //         var labelcs = document.getElementById("counterlabelcs");
-                //         var valuecs = document.getElementById("countervaluecs");
-                //         var opInput = document.getElementById("opInput");
-                //         var prodInput = document.getElementById("prodInput");
-                //         if (switchButtoncs.checked) {
-                //             labelcs.textContent = "Shift @shift Total Product : ";
-                //             valuecs.textContent = "@recordCountCurrentShift";
-                //             var currentTime = new Date();
-                //             if ((currentTime.getHours() === 7 && currentTime.getMinutes() === 0 && currentTime.getSeconds() < 20) || (currentTime.getHours() === 15 && currentTime.getMinutes() === 45 && currentTime.getSeconds() < 20) || (currentTime.getHours() === 23 && currentTime.getMinutes() === 0 && currentTime.getSeconds() < 20)) {
-                //                 operat = 0;
-                //                 opInput.value = operat;
-                //                 updateOPDisplay(operat);
-                //                 localStorage.setItem("opValuecs", operat);
-
-                //                 prodpl = 0;
-                //                 prodInput.value = prodpl;
-                //                 updatePPDisplay(prodpl);
-                //                 localStorage.setItem("prodValuecs", prodpl);
-
-                //                 intVal = 0;
-                //                 targInput.value = intVal;
-                //                 updateIntValDisplay();
-                //                 localStorage.setItem("intVal", intVal);
-
-                //                 reloadPage()
-                //             }
-                //         } else {
-                //             labelcs.textContent = "Total Product : ";
-                //             valuecs.textContent = "@latestTotalUnit";
-                //             var currentTime = new Date();
-                //             if ((currentTime.getHours() === 10 && currentTime.getMinutes() === 30 && currentTime.getSeconds() < 20) || (currentTime.getHours() === 16 && currentTime.getMinutes() === 0 && currentTime.getSeconds() < 20)) {
-                //                 operat = 0;
-                //                 opInput.value = operat;
-                //                 updateOPDisplay(operat);
-                //                 localStorage.setItem("opValuecs", operat);
-
-                //                 prodpl = 0;
-                //                 prodInput.value = prodpl;
-                //                 updatePPDisplay(prodpl);
-                //                 localStorage.setItem("prodValuecs", prodpl);
-
-                //                 intVal = 0;
-                //                 targInput.value = intVal;
-                //                 updateIntValDisplay();
-                //                 localStorage.setItem("intVal", intVal);
-
-                //                 reloadPage()
-                //             }
-                //         }
-                //     }
-                //     ceklosstime
-                // setInterval(checkLossTime, 2000);
-                //     Call the toggleSwitch function on page load to initialize the switch button state
-                //     toggleSwitchCS();
-                //     addIdle();
-
-                //     Retrieve the previous interval ID from session storage and update 'intervalId' variable
-                //     function reloadPage() {
-                //         location.reload();
-                //     }
-
-                //     if (operat == 0 || prodpl == 0 || operat == null || prodpl == null) {
-                //         modal_container.classList.add('show');
-                //     }
-
-                //     Set the interval and store the interval ID in session storage
-                //     setInterval(updateVariable, 900);
-                //     Retrieve 'intVal' from localStorage and update the display
-                //     intVal = parseInt(localStorage.getItem("intVal")) || 0;
-                //     updateIntValDisplay();
-
-                    // function toggleSwitchCS() {
-                    //         var switchButtoncs = document.getElementById("switchButtoncs");
-                    //         var labelcs = document.getElementById("counterlabelcs");
-                    //         var valuecs = document.getElementById("countervaluecs");
-                    //         var shiftModeInput = document.getElementById("shiftModeInput");
-
-                    //         // Update hidden input value
-                    //         if (shiftModeInput) {
-                    //             shiftModeInput.value = switchButtoncs.checked;
-                    //         }
-
-                    //         if (switchButtoncs.checked) {
-                    //             // MODE SHIFT AKTIF
-                    //             labelcs.textContent = "Shift @shift Total Product : ";
-                    //             valuecs.textContent = "@recordCountCurrentShift";
-                    //         } else {
-                    //             // MODE OVERTIME AKTIF
-                    //             labelcs.textContent = "Overtime - Total Product : ";
-                    //             valuecs.textContent = "@latestTotalUnit";
-                    //         }
-
-                    //         localStorage.setItem("switchStatecs", switchButtoncs.checked);
-                    //  }
-                       
-
+            // ===== Inisialisasi popup pilih shift saat page dibuka =====
+            document.querySelectorAll(".shift-select-btn").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    var shiftCode = this.getAttribute("data-shift");
+                    applyShiftSelection(shiftCode);
+                    var modalEl = document.getElementById("ShiftSelectModal");
+                    var modalInstance = bootstrap.Modal.getInstance(modalEl);
+                    if (modalInstance) modalInstance.hide();
+                    var serialInput = document.getElementById("serialNum");
+                    if (serialInput) serialInput.focus();
                 });
+            });
 
-            </script>
+            document.getElementById("confirmShiftEndBtn").addEventListener("click", function () {
+                var endModalEl = document.getElementById("ShiftEndModal");
+                var endModal = bootstrap.Modal.getInstance(endModalEl);
+                if (endModal) endModal.hide();
+                localStorage.removeItem("selectedShiftCS");
+                localStorage.removeItem("selectedShiftDateCS");
+                showShiftSelectModal();
+            });
+
+            document.getElementById("manualShiftSubmitBtn").addEventListener("click", function () {
+                showShiftEndModal();
+            });
+
+            var savedShift = localStorage.getItem("selectedShiftCS");
+            var savedDate = localStorage.getItem("selectedShiftDateCS");
+            var today = new Date().toDateString();
+
+            if (savedShift && savedDate === today) {
+                applyShiftSelection(savedShift);
+            } else {
+                showShiftSelectModal();
+            }
+
+            setInterval(checkShiftBoundary, 30000); // cek tiap 30 detik
+            setInterval(updateVariable, 900);
+            intVal = parseInt(localStorage.getItem("intVal")) || 0;
+            updateIntValDisplay();
+        });
+    </script>
     }

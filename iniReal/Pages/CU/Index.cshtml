@@ -1,62 +1,71 @@
 ﻿@page
 @model IndexModel
 @{
-	DateTime shift1Start = DateTime.Now.Date.AddHours(7);
-	DateTime shift1End = DateTime.Now.Date.AddHours(15).AddMinutes(45);
-	DateTime shift2Start = DateTime.Now.Date.AddHours(15).AddMinutes(45);
-	DateTime shift2End = DateTime.Now.Date.AddHours(23);
-	DateTime shift3Start = DateTime.Now.Date.AddHours(23);
-	DateTime shift3End = DateTime.Now.Date.AddDays(1).AddHours(7);
-	DateTime shift3End2 = DateTime.Now.Date.AddHours(7);
-	DateTime shift3Start2 = DateTime.Now.Date.AddDays(-1).AddHours(23);
-	int shift = 0;
-	decimal idletime;
-	var currentDate = DateTime.Now.Date;
-	var orderedRecords = Model.listUsers.Where(u => u.MachineCode == "MCH1-01")
-										.OrderByDescending(u => u.SDate) // Replace TimestampOrID with the actual property used for sorting.
-										.Take(150)
-										.ToList();
-	var currentRecord = orderedRecords.FirstOrDefault();
-	var previousRecord = orderedRecords.Skip(1).FirstOrDefault();
-	var firstRecordToday = Model.listUsers.FirstOrDefault(u => u.MachineCode == "MCH1-01" && u.SDate.Date == currentDate);
-	int recordCountCurrentShift = 0;
+    DateTime nsStart = DateTime.Now.Date.AddHours(7);
+    DateTime nsEnd = DateTime.Now.Date.AddHours(16);
+    DateTime shift1Start = DateTime.Now.Date.AddHours(7);
+    DateTime shift1End = DateTime.Now.Date.AddHours(15).AddMinutes(45);
+    DateTime shift2Start = DateTime.Now.Date.AddHours(15).AddMinutes(45);
+    DateTime shift2End = DateTime.Now.Date.AddHours(23);
+    DateTime shift3Start = DateTime.Now.Date.AddHours(23);
+    DateTime shift3End = DateTime.Now.Date.AddDays(1).AddHours(7);
+    DateTime shift3End2 = DateTime.Now.Date.AddHours(7);
+    DateTime shift3Start2 = DateTime.Now.Date.AddDays(-1).AddHours(23);
+    int shift = 0;
+    decimal idletime;
+    var currentDate = DateTime.Now.Date;
+    var orderedRecords = Model.listUsers.Where(u => u.MachineCode == "MCH1-01")
+                                        .OrderByDescending(u => u.SDate)
+                                        .Take(150)
+                                        .ToList();
+    var currentRecord = orderedRecords.FirstOrDefault();
+    var previousRecord = orderedRecords.Skip(1).FirstOrDefault();
+    var firstRecordToday = Model.listUsers.FirstOrDefault(u => u.MachineCode == "MCH1-01" && u.SDate.Date == currentDate);
+    int recordCountCurrentShift = 0;
+    int recordCountNS = 0;
 
-	if (currentRecord != null)
-	{
-		TimeSpan timedif = DateTime.Now - currentRecord.SDate;
-		idletime = (decimal)timedif.TotalSeconds;
-	}
-	else
-	{
-		idletime = 0;
-	}
+    if (currentRecord != null)
+    {
+        TimeSpan timedif = DateTime.Now - currentRecord.SDate;
+        idletime = (decimal)timedif.TotalSeconds;
+    }
+    else
+    {
+        idletime = 0;
+    }
 
-	if (DateTime.Now >= shift1Start && DateTime.Now < shift1End)
-	{
-		shift = 1;
-		recordCountCurrentShift = Model.listUsers.Count(u => u.SDate >= shift1Start && u.SDate < shift1End && u.MachineCode == "MCH1-01");
-	}
-	else if (DateTime.Now >= shift2Start && DateTime.Now < shift2End)
-	{
-		shift = 2;
-		recordCountCurrentShift = Model.listUsers.Count(u => u.SDate >= shift2Start && u.SDate < shift2End && u.MachineCode == "MCH1-01");
-	}
-	else if ((DateTime.Now >= shift3Start && DateTime.Now < shift3End) || (DateTime.Now >= shift3Start2 && DateTime.Now < shift3End))
-	{
-		shift = 3;
-		recordCountCurrentShift = Model.listUsers.Count(u => (((u.SDate >= shift3Start && u.SDate < shift3End) || (u.SDate >= shift3Start2 && u.SDate < shift3End2)) && u.MachineCode == "MCH1-01"));
-	}
+    // Hitungan Non-Shift (07:00 - 16:00)
+    if (DateTime.Now >= nsStart && DateTime.Now < nsEnd)
+    {
+        recordCountNS = Model.listUsers.Count(u => u.SDate >= nsStart && u.SDate < nsEnd && u.MachineCode == "MCH1-01");
+    }
 
-	string GetMachineName(string productId)
-	{
-		var product = Model.listCS.FirstOrDefault(p => p.Product_Id == productId);
-		return product != null ? product.ProductName : "Model not found";
-	}
-	int getSUT(string productId)
-	{
-		var sutval = Model.listCS.FirstOrDefault(p => p.Product_Id == productId);
-		return sutval != null ? sutval.SUT : 0;
-	}
+    if (DateTime.Now >= shift1Start && DateTime.Now < shift1End)
+    {
+        shift = 1;
+        recordCountCurrentShift = Model.listUsers.Count(u => u.SDate >= shift1Start && u.SDate < shift1End && u.MachineCode == "MCH1-01");
+    }
+    else if (DateTime.Now >= shift2Start && DateTime.Now < shift2End)
+    {
+        shift = 2;
+        recordCountCurrentShift = Model.listUsers.Count(u => u.SDate >= shift2Start && u.SDate < shift2End && u.MachineCode == "MCH1-01");
+    }
+    else if ((DateTime.Now >= shift3Start && DateTime.Now < shift3End) || (DateTime.Now >= shift3Start2 && DateTime.Now < shift3End2))
+    {
+        shift = 3;
+        recordCountCurrentShift = Model.listUsers.Count(u => (((u.SDate >= shift3Start && u.SDate < shift3End) || (u.SDate >= shift3Start2 && u.SDate < shift3End2)) && u.MachineCode == "MCH1-01"));
+    }
+
+    string GetMachineName(string productId)
+    {
+        var product = Model.listCS.FirstOrDefault(p => p.Product_Id == productId);
+        return product != null ? product.ProductName : "Model not found";
+    }
+    int getSUT(string productId)
+    {
+        var sutval = Model.listCS.FirstOrDefault(p => p.Product_Id == productId);
+        return sutval != null ? sutval.SUT : 0;
+    }
 }
 
 <style></style>
@@ -64,601 +73,555 @@
 <div style="margin-bottom: 10px;"></div>
 
 <div style="background-color: #180D2F; padding: 5px; color: #FFAE11; text-align: center;">
-	<h3>Barcode Product Counter</h3>
+    <h3>Barcode Product Counter</h3>
 </div>
 
 <div style="margin-bottom: 7px;"></div>
 
 <div style="background-color: #3c4561; padding: 5px; color: #FFAE11; display: flex;">
-	<div style="flex: 1;">
-		<div class="row m-2">
-			<label class="col-sm-3 col-form-label" style="font-size:20px; font-weight:600; color: white">Machine :</label>
-			@if (Model.listUsers.Count > 0 && currentRecord != null)
-			{
-							<div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
-								<span style="font-size:20px;">CU Assembly</span>
-							</div>
-			}
-			else
-			{
-							<div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
-								<span style="font-size:20px;"></span>
-							</div>
-			}
-		</div>
-		<div class="row m-2">
-			<label class="col-sm-3 col-form-label" style="font-size:20px; font-weight:600; color: white">Model :</label>
-			@if (Model.listUsers.Count > 0 && currentRecord != null)
-			{
-							<div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
-								<span style="font-size:20px;">@GetMachineName(currentRecord.Product_Id)</span>
-							</div>
-			}
-			else
-			{
-							<div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
-								<span style="font-size:20px;"></span>
-							</div>
-			}
-		</div>
-	</div>
+    <div style="flex: 1;">
+        <div class="row m-2">
+            <label class="col-sm-3 col-form-label" style="font-size:20px; font-weight:600; color: white">Machine :</label>
+            @if (Model.listUsers.Count > 0 && currentRecord != null)
+            {
+                <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
+                    <span style="font-size:20px;">CU Assembly</span>
+                </div>
+            }
+            else
+            {
+                <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
+                    <span style="font-size:20px;"></span>
+                </div>
+            }
+        </div>
+        <div class="row m-2">
+            <label class="col-sm-3 col-form-label" style="font-size:20px; font-weight:600; color: white">Model :</label>
+            @if (Model.listUsers.Count > 0 && currentRecord != null)
+            {
+                <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
+                    <span style="font-size:20px;">@GetMachineName(currentRecord.Product_Id)</span>
+                </div>
+            }
+            else
+            {
+                <div class="col-sm-9 align-self-center" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
+                    <span style="font-size:20px;"></span>
+                </div>
+            }
+        </div>
+    </div>
 
-	<div style="flex: 1;" class="align-self-center">
-		@{
-			var lastRecordForMachine = Model.listUsers
-			.Where(u => u.MachineCode == "MCH1-01")
-			.OrderByDescending(u => u.SDate)
-			.FirstOrDefault();
+    <div style="flex: 1;" class="align-self-center">
+        @{
+            var lastRecordForMachine = Model.listUsers
+            .Where(u => u.MachineCode == "MCH1-01")
+            .OrderByDescending(u => u.SDate)
+            .FirstOrDefault();
 
-			var latestTotalUnit = lastRecordForMachine != null ? (int)lastRecordForMachine.TotalUnit : 0;
-		}
+            var latestTotalUnit = lastRecordForMachine != null ? (int)lastRecordForMachine.TotalUnit : 0;
+        }
 
-		<div class="row m-2 text-end align-self-center">
-			<div class="col-sm-6 align-self-center">
-				<label style="font-size:20px; font-weight:600; color: white" id="counterlabelcs">Total Product :</label>
-			</div>
-			<div class="col-sm-6" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
-				<span style="font-size:50px;" id="countervaluecs">@latestTotalUnit</span>
-			</div>
-		</div>
-	</div>
+        <div class="row m-2 text-end align-self-center">
+            <div class="col-sm-6 align-self-center">
+                <label style="font-size:20px; font-weight:600; color: white" id="counterlabelcs">Total Product :</label>
+            </div>
+            <div class="col-sm-6" style="background-color: #87bbfa; font-weight:600; color: #180D2F">
+                <span style="font-size:50px;" id="countervaluecs">@latestTotalUnit</span>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row d-flex justify-content-between">
-	<div class="col-md-3" style="width:49%">
-		<form method="post" id="myForm">
-			<div class="row mt-2 mb-2" style="font-size: 28px; font-weight:500">
-				<label class="col-sm-3 col-form-label" style="width:300px">Scan Serial Number :</label>
-				<div class="col-sm-3 align-self-center">
-					<input type="text" class="form-control" id="serialNum" name="SerialNum" value="@Model.iniUser.SN_GOOD" form="myForm" autofocus style="font-size:28px; width:270px" />
-				</div>
-			</div>
-		</form>
-	</div>
+    <div class="col-md-3" style="width:49%">
+        <form method="post" id="myForm">
+            <input type="hidden" id="shiftModeInput" name="ShiftMode" value="" />
+            <div class="row mt-2 mb-2" style="font-size: 28px; font-weight:500">
+                <label class="col-sm-3 col-form-label" style="width:300px">Scan Serial Number :</label>
+                <div class="col-sm-3 align-self-center">
+                    <input type="text" class="form-control" id="serialNum" name="SerialNum" value="@Model.iniUser.SN_GOOD" form="myForm" autofocus style="font-size:28px; width:270px" />
+                </div>
+            </div>
+        </form>
+    </div>
 
-	<div class="col-md-3" style="width:49%">
-		<div class="row mt-2 mb-2 align-items-center justify-content-center" style="font-size: 28px; font-weight:500">
-			<label class="col-sm-3 col-form-label" style="width:200px">Mode Shift : </label>
-			<div class="col-sm-3 mt-2">
-				<label class="slider-switch">
-					<input type="checkbox" id="switchButtoncs" @(shift == 1 ? "checked" : "") onchange="toggleSwitch()">
-					<span class="slider round"></span>
-				</label>
-			</div>
-		</div>
-	</div>
+    <div class="col-md-3" style="width:49%">
+        <div class="row mt-2 mb-2 align-items-center justify-content-center" style="font-size: 20px; font-weight:600">
+            <label class="col-sm-6 col-form-label text-end" style="width:220px" id="currentPeriodLabel">Periode : -</label>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="CUProductionModal" tabindex="-1" data-bs-backdrop="static" aria-labelledby="exampleModalLabel" aria-hidden="true">
-	<div class="modal-dialog modal-dialog-centered">
-		<div class="modal-content">
-			<div class="modal-header">
-				<h5 class="modal-title" id="exampleModalLabel">Produksi CU</h5>
-				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="CloseCUModal"></button>
-			</div>
-			<div class="modal-body">
-				<div>
-					 <label class="col col-form-label" style="font-weight:bold;">Masukkan Jumlah Operator!!</label>
-				</div>
-				<input type="number" class="form-control" name="OP" id="opInput" value="@Model.iniUser.NoOfOperator" form="myForm" style="font-size:28px;" />
-				<div>
-					<label class="col col-form-label" style="font-weight:bold;">Masukkan Jumlah Production Plan!!</label>
-				 </div>
-				<input type="number" class="form-control" name="PP" id="prodInput" value="@Model.iniUser.TargetUnit" form="myForm" style="font-size:28px;" />
-				<div class="d-flex w-100 justify-content-end">
-					<button id="close" class="btn btn-primary mt-3">Submit</button>
-				</div>
-			</div>
-		</div>
-	</div>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Produksi CU</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="CloseCUModal"></button>
+            </div>
+            <div class="modal-body">
+                <div>
+                    <label class="col col-form-label" style="font-weight:bold;">Masukkan Jumlah Operator!!</label>
+                </div>
+                <input type="number" class="form-control" name="OP" id="opInput" value="@Model.iniUser.NoOfOperator" form="myForm" style="font-size:28px;" />
+                <div>
+                    <label class="col col-form-label" style="font-weight:bold;">Masukkan Jumlah Production Plan!!</label>
+                </div>
+                <input type="number" class="form-control" name="PP" id="prodInput" value="@Model.iniUser.TargetUnit" form="myForm" style="font-size:28px;" />
+                <div class="d-flex w-100 justify-content-end">
+                    <button id="close" class="btn btn-primary mt-3">Submit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Modal Pilih Shift/Periode - muncul otomatis saat page dibuka -->
+<!-- dan setiap kali periode sebelumnya sudah berakhir             -->
+<!-- ============================================================ -->
+<div class="modal fade" id="ShiftSelectModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="ShiftSelectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color:#180D2F; color:#FFAE11;">
+                <h5 class="modal-title" id="ShiftSelectModalLabel">Pilih Shift Kerja</h5>
+            </div>
+            <div class="modal-body">
+                <p class="text-center mb-3" style="font-size:16px;">Silakan pilih periode kerja Anda saat ini:</p>
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary shift-select-btn" data-shift="NS" style="font-size:18px; padding:12px;">
+                        Non-Shift
+                    </button>
+                    <button type="button" class="btn btn-outline-primary shift-select-btn" data-shift="1" style="font-size:18px; padding:12px;">
+                        Shift 1
+                    </button>
+                    <button type="button" class="btn btn-outline-primary shift-select-btn" data-shift="2" style="font-size:18px; padding:12px;">
+                        Shift 2
+                    </button>
+                    <button type="button" class="btn btn-outline-primary shift-select-btn" data-shift="3" style="font-size:18px; padding:12px;">
+                        Shift 3
+                    </button>
+                </div>
+                <p class="text-center text-muted mt-3 mb-0" style="font-size:13px;">
+                    Jika Anda memilih shift di luar jam operasionalnya, data otomatis akan dicatat sebagai <strong>Overtime</strong>.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Modal Konfirmasi Akhir Periode - muncul saat periode berakhir -->
+<!-- atau saat tombol submit manual (overtime) dipencet             -->
+<!-- ============================================================ -->
+<div class="modal fade" id="ShiftEndModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="ShiftEndModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color:#180D2F; color:#FFAE11;">
+                <h5 class="modal-title" id="ShiftEndModalLabel">Konfirmasi Akhir Periode</h5>
+            </div>
+            <div class="modal-body">
+                <p>Pastikan Total Produksi berikut sudah <strong>benar</strong> sebelum lanjut ke periode berikutnya:</p>
+                <div class="text-center mb-3">
+                    <div style="font-size:16px; color:#555;" id="shiftEndPeriodLabel">-</div>
+                    <span style="font-size:38px; font-weight:bold; color:#180D2F;" id="shiftEndTotalDisplay">0</span>
+                </div>
+                <div class="d-flex w-100 justify-content-end">
+                    <button type="button" id="confirmShiftEndBtn" class="btn btn-primary">Submit &amp; Pilih Periode Baru</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <input type="number" class="form-control" name="TU" id="targInput" value="@Model.iniUser.TargetUnit" form="myForm" style="font-size:28px; display:none" />
 <input type="hidden" class="form-control" name="IT" id="idleInput" value="@Model.iniUser.IdleTime" form="myForm" style="font-size:28px; display:none" />
 
-@* <button type="button" class="btn btn-primary mb-4" >Loss Time</button> *@
 @if (currentRecord != null)
 {
-				<div class="row" style="font-size: 28px; font-weight:500">
-					<div class="col-sm-3">
-						<label>Current Record :</label>
-					</div>
-					<div class="col-sm-3">
-						<span id="currentRecordValue">@currentRecord.SN_GOOD</span>
-					</div>
-				</div>
+    <div class="row" style="font-size: 28px; font-weight:500">
+        <div class="col-sm-3">
+            <label>Current Record :</label>
+        </div>
+        <div class="col-sm-3">
+            <span id="currentRecordValue">@currentRecord.SN_GOOD</span>
+        </div>
+    </div>
 }
 else
 {
-				<div class="row" style="font-size: 28px; font-weight:500">
-					<div class="col-sm-3">
-						<label>Current Record :</label>
-					</div>
-					<div class="col-sm-3">
-						<span id="currentRecordValue">No current record found.</span>
-					</div>
-				</div>
+    <div class="row" style="font-size: 28px; font-weight:500">
+        <div class="col-sm-3">
+            <label>Current Record :</label>
+        </div>
+        <div class="col-sm-3">
+            <span id="currentRecordValue">No current record found.</span>
+        </div>
+    </div>
 }
 
 @if (previousRecord != null)
 {
-				<div class="row" style="font-size: 28px; font-weight:500">
-					<div class="col-sm-3 pb-">
-						<label>Previous Record :</label>
-					</div>
-					<div class="col-sm-3">
-						<span>@previousRecord.SN_GOOD</span>
-					</div>
-				</div>
+    <div class="row" style="font-size: 28px; font-weight:500">
+        <div class="col-sm-3 pb-">
+            <label>Previous Record :</label>
+        </div>
+        <div class="col-sm-3">
+            <span>@previousRecord.SN_GOOD</span>
+        </div>
+    </div>
 }
 else
 {
-				<div class="row" style="font-size: 28px; font-weight:500">
-					<div class="col-sm-3">
-						<label>Previous Record :</label>
-					</div>
-					<div class="col-sm-3">
-						<span>No previous record found.</span>r 
-					</div>
-				</div>
+    <div class="row" style="font-size: 28px; font-weight:500">
+        <div class="col-sm-3">
+            <label>Previous Record :</label>
+        </div>
+        <div class="col-sm-3">
+            <span>No previous record found.</span>
+        </div>
+    </div>
 }
 
 <div class="row" style="font-size: 28px; font-weight:500; display:none">
-	<label class="col-sm-3 col-form-label">Jumlah Operator :</label>
-	<div class="col-sm-3 align-self-center">
-		<div id="opDisplay" style="font-size: 28px; font-weight: bold; color: #87bbfa;"></div>
-	</div>
+    <label class="col-sm-3 col-form-label">Jumlah Operator :</label>
+    <div class="col-sm-3 align-self-center">
+        <div id="opDisplay" style="font-size: 28px; font-weight: bold; color: #87bbfa;"></div>
+    </div>
 </div>
 
 <div class="row" style="font-size: 28px; font-weight:500; display:none">
-	<label class="col-sm-3 col-form-label">Production Plan :</label>
-	<div class="col-sm-3 align-self-center">
-		<div id="prodDisplay" style="font-size: 28px; font-weight: bold; color: #87bbfa;"></div>
-	</div>
+    <label class="col-sm-3 col-form-label">Production Plan :</label>
+    <div class="col-sm-3 align-self-center">
+        <div id="prodDisplay" style="font-size: 28px; font-weight: bold; color: #87bbfa;"></div>
+    </div>
 </div>
 
 <div class="row" style="font-size: 28px; font-weight:500; display:none ">
-	<label class="col-sm-3 col-form-label">Target Unit :</label>
-	<div class="col-sm-3 align-self-center">
-		<div id="interDisp" style="font-size: 28px; font-weight: bold; color: #87bbfa;"></div>
-	</div>
+    <label class="col-sm-3 col-form-label">Target Unit :</label>
+    <div class="col-sm-3 align-self-center">
+        <div id="interDisp" style="font-size: 28px; font-weight: bold; color: #87bbfa;"></div>
+    </div>
 </div>
 
 
 @if (!string.IsNullOrEmpty(Model.errorMessage))
 {
-				<div class="alert alert-dismissible fade show d-flex justify-content-center align-items-center" style="background-color:black">
-					<strong style="font-size:20px; color:red">@Model.errorMessage</strong>
-				</div>
+    bool isDuplicate = Model.errorMessage.Contains("DUPLIKAT");
+    <div class="alert alert-dismissible fade show d-flex justify-content-center align-items-center"
+         style="background-color:black; @(isDuplicate ? "border: 3px solid red;" : "")">
+        <strong style="font-size:@(isDuplicate ? "26px" : "20px"); color:red; @(isDuplicate ? "animation: blink 0.8s step-start infinite;" : "")">
+            @Model.errorMessage
+        </strong>
+    </div>
 }
+
+<style>
+    @@keyframes blink {
+        50% {
+            opacity: 0;
+        }
+    }
+</style>
 
 
 <div>
-	<table class="table table-bordered table-striped mt-3" style="font-size:15px">
-		<thead>
-			<tr>
-				<th>Date</th>
-				<th>Time</th>
-				<th>Machine</th>
-				<th>Model</th>
-				 <th>Serial Number</th>
-			</tr>
-		</thead>
-		<tbody>
-			@foreach (var item in Model.listUsers.Where(u => (u.Date.Date == DateTime.Now.Date && u.MachineCode == "MCH1-01")).OrderByDescending(u => u.SDate).Take(5))
-			{
-						<tr style="font-weight:bold">
-							 <td>@item.Date.ToShortDateString()</td>
-							<td>@item.SDate.ToString("HH:mm:ss").Replace('.', ':')</td>
-							<td>CU Assembly</td>
-							<td>@GetMachineName(item.Product_Id)</td>
-							<td>@item.SN_GOOD</td>
-						</tr>
-			}
-		</tbody>
-	</table>
+    <table class="table table-bordered table-striped mt-3" style="font-size:15px">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Machine</th>
+                <th>Model</th>
+                <th>Serial Number</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.listUsers.Where(u => (u.Date.Date == DateTime.Now.Date && u.MachineCode == "MCH1-01")).OrderByDescending(u => u.SDate).Take(5))
+            {
+                <tr style="font-weight:bold">
+                    <td>@item.Date.ToShortDateString()</td>
+                    <td>@item.SDate.ToString("HH:mm:ss").Replace('.', ':')</td>
+                    <td>CU Assembly</td>
+                    <td>@GetMachineName(item.Product_Id)</td>
+                    <td>@item.SN_GOOD</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- ============================================================ -->
+<!-- Tombol submit manual - dipakai khusus untuk kondisi Overtime  -->
+<!-- karena jam berakhirnya tidak pasti / tidak terjadwal           -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-end mt-3 mb-4">
+    <button type="button" id="manualShiftSubmitBtn" class="btn btn-success" style="font-size:18px; font-weight:600;">
+        Akhiri Periode / Submit (untuk Overtime)
+    </button>
 </div>
 
 <component type="typeof(LossTimeModal)" render-mode="ServerPrerendered" />
 
-@* IN 
- DEVELOPMENT *@
-@*<div class="modal fade" id="LossTime" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="LossTime" aria-hidden="true">
-	<div class="modal-dialog modal-dialog-centered modal-xl">
-		<div class="modal-content p-4">
-			<div class="modal-header">
-				<h2 class="fs-4 fw-bold">Loss Time</h2>
-			</div>
-			<div class="modal-body">
-				<h4 class="mb-4 text-center">There is Loss Time in Production, What is the reason?</h4>
-
-				<form method="post" asp-page-handler="SaveLossTime">
-					<input type="hidden" name="LossTimeReason" id="LossTimeReasonInput" />
-
-					<div class="d-flex gap-3 justify-content-center mb-2">
-						 <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Change Model">
-							<h3 class="text-center p-4 fw-bold">Change Model</h3>
-						</button>
-						 <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Material Shortage External">
-							<h3 class="text-center p-4 fw-bold">Material Shortage External</h3>
-						</button>
-						<button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="MP Adjustment">
-							<h3 class="text-center p-4 fw-bold">MP Adjustment</h3>
-						</button>
-						<button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Material Shortage Internal">
-							 <h3 class="text-center p-4 fw-bold">Material Shortage Internal</h3>
-						</button>
-					</div>
-					<div class="d-flex gap-3 justify-content-center">
-						 <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Material Shortage Inhouse">
-							<h3 class="text-center p-4 fw-bold">Material Shortage Inhouse</h3>
-						</button>
-						 <button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Quality Trouble">
-							<h3 class="text-center p-4 fw-bold">Quality Trouble</h3>
-						</button>
-						<button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Machine Trouble">
-							<h3 class="text-center p-4 fw-bold">Machine Trouble</h3>
-						</button>
-						<button type="submit" class="btn w-75 btn-outline-primary reason-btn" data-reason="Rework">
-							 <h3 class="text-center p-4 fw-bold">Rework</h3>
-						</button>
-					</div>
-				</form>
-			</div>
-		</div>
-	 </div>
-</div>
-*@
-
 @section Scripts {
-					<script>
-						// Declare 'operat' variable' and initialize it with 0
-						var operat = 0;
-						var prodpl = 0;
-						var intVal = 0;
-						var intervalId;
-						document.addEventListener("DOMContentLoaded", function () {
-							var opInput = document.getElementById("opInput");
-							var prodInput = document.getElementById("prodInput");
-							var opInputValue = document.getElementById("opInputValue");
-							var prodInputValue = document.getElementById("prodInputValue");
+    <script>
+        // Declare 'operat' variable' and initialize it with 0
+        var operat = 0;
+        var prodpl = 0;
+        var intVal = 0;
+        var intervalId;
 
-							setInterval(() => {
-								 opInputValue.value = opInput.value;
-								prodInputValue.value = prodInput;
-							}, 500)
+        // ===================== SHIFT/PERIODE (popup based) =====================
+        var shiftLabels = { "NS": "Non-Shift", "1": "Shift 1", "2": "Shift 2", "3": "Shift 3" };
 
-							// enter to submit
-							const form = document.getElementById("myForm");
-							 const input = document.getElementById("serialNum");
+        function getShiftWindow(shiftCode) {
+            var now = new Date();
+            var d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-							form.addEventListener("keydown", function (event) {
-								if (event.key === "Enter") {
-									event.preventDefault();
-									 form.submit();
-								}
-							});
+            if (shiftCode === "NS") {
+                var s = new Date(d); s.setHours(7, 0, 0, 0);
+                var e = new Date(d); e.setHours(16, 0, 0, 0);
+                return { start: s.getTime(), end: e.getTime() };
+            }
+            if (shiftCode === "1") {
+                var s = new Date(d); s.setHours(7, 0, 0, 0);
+                var e = new Date(d); e.setHours(15, 45, 0, 0);
+                return { start: s.getTime(), end: e.getTime() };
+            }
+            if (shiftCode === "2") {
+                var s = new Date(d); s.setHours(15, 45, 0, 0);
+                var e = new Date(d); e.setHours(23, 0, 0, 0);
+                return { start: s.getTime(), end: e.getTime() };
+            }
+            if (shiftCode === "3") {
+                var s1 = new Date(d); s1.setHours(23, 0, 0, 0);
+                var e1 = new Date(d); e1.setDate(e1.getDate() + 1); e1.setHours(7, 0, 0, 0);
+                var s2 = new Date(d); s2.setDate(s2.getDate() - 1); s2.setHours(23, 0, 0, 0);
+                var e2 = new Date(d); e2.setHours(7, 0, 0, 0);
+                var nowT = now.getTime();
+                if (nowT >= s1.getTime()) {
+                    return { start: s1.getTime(), end: e1.getTime() };
+                }
+                return { start: s2.getTime(), end: e2.getTime() };
+            }
+            return { start: 0, end: 0 };
+        }
 
-							let timeout;
-							input.addEventListener("input", function () {
-								clearTimeout(timeout);
-								timeout = setTimeout(function () {
-									if (input.value != "") {
-										form.submit(); 
-									}
-								 }, 500); 
-							});
+        function isWithinShiftWindow(shiftCode) {
+            var win = getShiftWindow(shiftCode);
+            var now = new Date().getTime();
+            return now >= win.start && now < win.end;
+        }
 
-							// Modal
-							// const open = document.getElementById('opencu');
-							// const modal_container = document.getElementById('CUProductionModal');
-							const close = document.getElementById('close');
-							const closebtn = document.getElementById('CloseCUModal');
-							close.addEventListener('click', () => {
-								closebtn.click();
-							});
-							// Load the switch state and OP value from local storage on page load
-							var switchButtoncs = document.getElementById("switchButtoncs");
-							var labelcs = document.getElementById("counterlabelcs");
-							var valuecs = document.getElementById("countervaluecs");
-							// var opInput = document.getElementById("opInput");
-							// var prodInput = document.getElementById("prodInput");
-							var targInput = document.getElementById("targInput");
-							var idleInput = document.getElementById("idleInput");
+        function applyShiftSelection(shiftCode) {
+            localStorage.setItem("selectedShiftCU", shiftCode);
+            localStorage.setItem("selectedShiftDateCU", new Date().toDateString());
 
-							var targValue = localStorage.getItem("intValcu");
-							if (targValue != null) {
-								targInput.value = targValue;
-								intVal = parseInt(targValue);
-							}
+            var hiddenInputElement = document.getElementById("shiftModeInput");
+            var labelcs = document.getElementById("counterlabelcs");
+            var valuecs = document.getElementById("countervaluecs");
+            var periodLabel = document.getElementById("currentPeriodLabel");
 
-							// get the switch state from local storage
-							var switchStatecs = localStorage.getItem("switchStatecu");
-							if (switchStatecs !== null) {
-								switchButtoncs.checked = JSON.parse(switchStatecs);
-							}
+            hiddenInputElement.value = shiftCode;
 
-							var opValue = localStorage.getItem("opValuecu");
-							if (opValue !== null) {
-								opInput.value = opValue;
-								// Update 'operat' variable with the initial "OP" value
-								operat = parseInt(opValue);
-							}
+            if (isWithinShiftWindow(shiftCode)) {
+                if (shiftCode === "NS") {
+                    labelcs.textContent = "Non-Shift Total Product : ";
+                    valuecs.textContent = "@recordCountNS";
+                } else {
+                    labelcs.textContent = shiftLabels[shiftCode] + " Total Product : ";
+                    valuecs.textContent = "@recordCountCurrentShift";
+                }
+                periodLabel.textContent = "Periode : " + shiftLabels[shiftCode];
+            } else {
+                labelcs.textContent = "Overtime - Total Product : ";
+                valuecs.textContent = "@latestTotalUnit";
+                periodLabel.textContent = "Periode : Overtime (dipilih: " + shiftLabels[shiftCode] + ")";
+            }
+        }
 
-							var prodValue = localStorage.getItem("prodValuecu");
-							if (prodValue != null) {
-								prodInput.value = prodValue;
-								prodpl = parseInt(prodValue);
-							}
+        function showShiftSelectModal() {
+            var modal = new bootstrap.Modal(document.getElementById("ShiftSelectModal"));
+            modal.show();
+        }
 
-							// Update the display of OP value when the page loads
-							updateOPDisplay(opValue);
-							updatePPDisplay(prodValue);
+        function showShiftEndModal() {
+            var valuecs = document.getElementById("countervaluecs");
+            var labelcs = document.getElementById("counterlabelcs");
+            document.getElementById("shiftEndTotalDisplay").textContent = valuecs.textContent;
+            document.getElementById("shiftEndPeriodLabel").textContent = labelcs.textContent.replace(/:\s*$/, "");
+            var endModal = new bootstrap.Modal(document.getElementById("ShiftEndModal"));
+            endModal.show();
+        }
 
-							// Save the switch state and OP value to local storage and update UI when the switch is toggled
-							switchButtoncs.addEventListener("change", function () {
-								localStorage.setItem("switchStatecu", switchButtoncs.checked);
-								toggleSwitch(); // Nama fungsi disesuaikan
-							});
-							opInput.addEventListener("change", function () {
-								localStorage.setItem("opValuecu", opInput.value);
-								updateOPDisplay(opInput.value);
-								// Update 'operat' variable with the new "OP" value
-								operat = parseInt(opInput.value);
-								 });
-							prodInput.addEventListener("change", function () {
-								localStorage.setItem("prodValuecu", prodInput.value);
-								updatePPDisplay(prodInput.value);
-								prodpl = parseInt(prodInput.value);
-							});
-							function updateVariable() {
-							const now = new Date();
-							
-							let startOfShift = new Date(now);
-							startOfShift.setHours(7, 0, 0, 0);
+        function checkShiftBoundary() {
+            var selectedShift = localStorage.getItem("selectedShiftCU");
+            if (!selectedShift) return;
 
-							if (now.getHours() < 7) {
-								startOfShift.setDate(startOfShift.getDate() - 1);
-							}
+            if (!isWithinShiftWindow(selectedShift)) {
+                var flagKey = "shiftEndPromptedCU_" + selectedShift + "_" + new Date().toDateString();
+                if (!sessionStorage.getItem(flagKey)) {
+                    showShiftEndModal();
+                    sessionStorage.setItem(flagKey, "1");
+                }
+            }
+        }
 
-							const timeDiffSeconds = Math.floor((now - startOfShift) / 1000);
+        document.addEventListener("DOMContentLoaded", function () {
+            var opInput = document.getElementById("opInput");
+            var prodInput = document.getElementById("prodInput");
+            var opInputValue = document.getElementById("opInputValue");
+            var prodInputValue = document.getElementById("prodInputValue");
 
-							const sutVal = @getSUT(currentRecord.Product_Id);
-							if (sutVal > 0) {
-								intVal = Math.floor(timeDiffSeconds / sutVal);
+            //setInterval(() => {
+                // opInputValue.value = opInput.value;
+                //prodInputValue.value = prodInput;
+            //}, 500)
 
-								localStorage.setItem("intValcu", intVal);
-								var targValue = localStorage.getItem("intValcu");
-								if (targValue != null) {
-									targInput.value = targValue;
-								}
-								updateIntValDisplay();
-							}
-						}
+            // enter to submit
+            const form = document.getElementById("myForm");
+             const input = document.getElementById("serialNum");
 
-							// ================================================================
-							// MULAI BLOK PERUBAHAN JAVASCRIPT
-							// ================================================================
+            form.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                     form.submit();
+                }
+            });
 
-							// var lastRecordValue = document.getElementById("currentRecordValue").innerText;
-							// var lastUpdateTime = new Date().getTime(); Waktu saat nilai terakhir berubah
+            let timeout;
+            input.addEventListener("input", function () {
+                clearTimeout(timeout);
+                timeout = setTimeout(function () {
+                    if (input.value != "") {
+                        form.submit();
+                    }
+                 }, 500);
+            });
 
-							// 1. Definisikan ambang batas waktu dengan lebih aman
-							//var SUTTime = @(currentRecord != null ? getSUT(currentRecord.Product_Id) : 0);
-							// var losstimethreshold = SUTTime > 0 ? SUTTime * 3 * 1000 : 180000; Default 3 menit jika SUT 0
-							// var twoHourThreshold = 2 * 60 * 60 * 1000; 2 jam dalam milidetik
+            // Modal
+            const close = document.getElementById('close');
+            const closebtn = document.getElementById('CloseCUModal');
+            close.addEventListener('click', () => {
+                closebtn.click();
+            });
 
-							// console.log("berjalan");
+            var targInput = document.getElementById("targInput");
+            var idleInput = document.getElementById("idleInput");
 
-							// 2. Fungsi checkLossTime yang telah diperbarui
-							// function checkLossTime() {
-							// 	var currentRecordValue = document.getElementById("currentRecordValue").innerText;
-							// 	var currentTime = new Date().getTime();
-							// 	var switchButton = document.getElementById("switchButtoncs"); Mengambil status tombol shift
+            var targValue = localStorage.getItem("intValcu");
+            if (targValue != null) {
+                targInput.value = targValue;
+                intVal = parseInt(targValue);
+            }
 
-							// 	Jika ada produk baru yang di-scan, reset timer
-							// 	if (currentRecordValue !== lastRecordValue) {
-							// 		lastRecordValue = currentRecordValue;
-							// 		lastUpdateTime = currentTime;
-							// 		return; Keluar dari fungsi setelah reset
-							// 	}
+            var opValue = localStorage.getItem("opValuecu");
+            if (opValue !== null) {
+                opInput.value = opValue;
+                operat = parseInt(opValue);
+            }
 
-							// 	var idleTime = currentTime - lastUpdateTime;
-							// 	var isModalShown = document.getElementById('LossTime').classList.contains('show');
+            var prodValue = localStorage.getItem("prodValuecu");
+            if (prodValue != null) {
+                prodInput.value = prodValue;
+                prodpl = parseInt(prodValue);
+            }
 
-							// 	Jangan lanjutkan jika modal sudah terlihat
-							// 	if (isModalShown) {
-							// 		return;
-							// 	}
+            updateOPDisplay(opValue);
+            updatePPDisplay(prodValue);
 
-							// 	Logika saat MODE SHIFT MATI
-							// 	if (!switchButton.checked) {
-							// 		Tampilkan modal HANYA jika waktu idle > ambang SUT TETAPI < 2 jam
-							// 		if (idleTime > losstimethreshold && idleTime < twoHourThreshold) {
-							// 			console.log("Mode Shift MATI. Waktu idle di antara ambang SUT dan 2 jam. Menampilkan modal.");
-							// 			var lossTimeModal = new bootstrap.Modal(document.getElementById("LossTime"));
-							// 			lossTimeModal.show();
-							// 		}
-							// 		Jika idleTime > 2 jam, jangan lakukan apa-apa, sesuai permintaan.
-							// 	}
-							// 	Logika saat MODE SHIFT NYALA (logika asli)
-							// 	else {
-							// 		if (idleTime > losstimethreshold) {
-							// 			console.log("Mode Shift NYALA. Waktu idle melebihi ambang SUT. Menampilkan modal.");
-							// 			var lossTimeModal = new bootstrap.Modal(document.getElementById("LossTime"));
-							// 			lossTimeModal.show();
-							// 		}
-							// 	}
-							// }
+            opInput.addEventListener("change", function () {
+                localStorage.setItem("opValuecu", opInput.value);
+                updateOPDisplay(opInput.value);
+                operat = parseInt(opInput.value);
+                 });
+            prodInput.addEventListener("change", function () {
+                localStorage.setItem("prodValuecu", prodInput.value);
+                updatePPDisplay(prodInput.value);
+                prodpl = parseInt(prodInput.value);
+            });
 
+            function updateVariable() {
+                const now = new Date();
 
-							// document.querySelectorAll('.reason-btn').forEach(button => {
-							// 	button.addEventListener('click', function (event) {
-							// 		event.preventDefault(); Mencegah submit langsung sebelum input diisi
-							// 		let reason = this.getAttribute('data-reason');
-							// 		 console.log("data reason sebelum :" + reason);
-							// 		Masukkan alasan ke input tersembunyi
-							// 		let inputField = document.getElementById('LossTimeReasonInput');
-							// 		if (!inputField) {
-							// 		 console.error("Input LossTimeReasonInput tidak ditemukan!");
-							// 			return;
-							// 		}
+                let startOfShift = new Date(now);
+                startOfShift.setHours(7, 0, 0, 0);
 
-							// 		inputField.value = reason;
-							// 		console.log("Mengirim form dengan reason:", reason);
-							// 		 let form = this.closest('form');
-							// 		if (!form) {
-							// 			console.error("Form tidak ditemukan!");
-							// 			return;
-							// 		}
+                if (now.getHours() < 7) {
+                    startOfShift.setDate(startOfShift.getDate() - 1);
+                }
 
-							// 		form.submit();
-							// 	});
-							// });
+                const timeDiffSeconds = Math.floor((now - startOfShift) / 1000);
 
-							// document.querySelectorAll(".reason-btn").forEach(button => {
-							// 	button.addEventListener("click", function () {
-							// 		lastUpdateTime = new Date().getTime(); Reset waktu setelah memilih alasan
-							// 		var lossTimeModal = document.getElementById("LossTime");
-							// 		var modalInstance = bootstrap.Modal.getInstance(lossTimeModal);
-							// 		 if (!modalInstance) {
-							// 			modalInstance = new bootstrap.Modal(lossTimeModal);
-							// 		}
-							// 		modalInstance.hide();Tutup modal setelah memilih alasan
-							// 		 document.querySelectorAll('.modal-backdrop').forEach(el => el.remove()); Hapus backdrop yang tersisa
-							// 	});
+                const sutVal = @getSUT(currentRecord.Product_Id);
+                if (sutVal > 0) {
+                    intVal = Math.floor(timeDiffSeconds / sutVal);
 
-							// 	document.getElementById("LossTime").addEventListener("hidden.bs.modal", function () {
-							// 		let serialInput = document.getElementById("serialNum");
-							// 		if (serialInput) {
-							// 			 setTimeout(() => {
-							// 				serialInput.focus();
-							// 			}, 10); Delay sedikit agar transisi modal selesai dulu
-							// 		}
-							// 	});
-							// });
+                    localStorage.setItem("intValcu", intVal);
+                    var targValue = localStorage.getItem("intValcu");
+                    if (targValue != null) {
+                        targInput.value = targValue;
+                    }
+                    updateIntValDisplay();
+                }
+            }
 
+            function updateOPDisplay(value) {
+                var opDisplay = document.getElementById("opDisplay");
+                if (opDisplay) opDisplay.textContent = value;
+            }
 
-							// function addIdle() {
-							// 	Penambahan kondisi untuk mencegah error jika currentRecord null
-							// 	if ("@currentRecord" != "") {
-							// 		idleInput.value = "@currentRecord.SDate.ToString("yyyy-MM-dd HH:mm:ss")";
-							// 	}
-							// }
+            function updatePPDisplay(value) {
+                var prodDisplay = document.getElementById("prodDisplay");
+                if (prodDisplay) prodDisplay.textContent = value;
+            }
 
-							// Function to update the display of 'intVal'
-							// function updateIntValDisplay() {
-							// 	var interDisp = document.getElementById("interDisp");
-							// 	interDisp.textContent = intVal;
-							// }
+            function updateIntValDisplay() {
+                var interDisp = document.getElementById("interDisp");
+                if (interDisp) interDisp.textContent = intVal;
+            }
 
-							// Function to update the display of the OP value
-							// function updateOPDisplay(value) {
-							// 	var opDisplay = document.getElementById("opDisplay");
-							// 	opDisplay.textContent = value;
-							// }
+            // ===== Inisialisasi popup pilih shift saat page dibuka =====
+            document.querySelectorAll(".shift-select-btn").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    var shiftCode = this.getAttribute("data-shift");
+                    applyShiftSelection(shiftCode);
+                    var modalEl = document.getElementById("ShiftSelectModal");
+                    var modalInstance = bootstrap.Modal.getInstance(modalEl);
+                    if (modalInstance) modalInstance.hide();
+                    var serialInput = document.getElementById("serialNum");
+                    if (serialInput) serialInput.focus();
+                });
+            });
 
-							// function updatePPDisplay(value) {
-							// 	var prodDisplay = document.getElementById("prodDisplay");
-							// 	prodDisplay.textContent = value;
-							// }
+            document.getElementById("confirmShiftEndBtn").addEventListener("click", function () {
+                var endModalEl = document.getElementById("ShiftEndModal");
+                var endModal = bootstrap.Modal.getInstance(endModalEl);
+                if (endModal) endModal.hide();
+                localStorage.removeItem("selectedShiftCU");
+                localStorage.removeItem("selectedShiftDateCU");
+                showShiftSelectModal();
+            });
 
-							// 3. Perbaiki nama fungsi menjadi toggleSwitch
-							// function toggleSwitch() {
-							// 	var switchButtoncs = document.getElementById("switchButtoncs");
-							// 	var labelcs = document.getElementById("counterlabelcs");
-							// 	var valuecs = document.getElementById("countervaluecs");
-							// 	var opInput = document.getElementById("opInput");
-							// 	var prodInput = document.getElementById("prodInput");
-							// 	if (switchButtoncs.checked) {
-							// 		labelcs.textContent = "Shift @shift Total Product : ";
-							// 		valuecs.textContent = "@recordCountCurrentShift";
-							// 		var currentTime = new Date();
-							// 		if ((currentTime.getHours() === 7 && currentTime.getMinutes() === 0 && currentTime.getSeconds() < 20) || (currentTime.getHours() === 15 && currentTime.getMinutes() === 45 && currentTime.getSeconds() < 20) || (currentTime.getHours() === 23 && currentTime.getMinutes() === 0 && currentTime.getSeconds() < 20)) {
-							// 			operat = 0;
-							// 			opInput.value = operat;
-							// 			updateOPDisplay(operat);
-							// 			localStorage.setItem("opValuecu", operat);
+            document.getElementById("manualShiftSubmitBtn").addEventListener("click", function () {
+                showShiftEndModal();
+            });
 
-							// 			prodpl = 0;
-							// 			prodInput.value = prodpl;
-							// 			updatePPDisplay(prodpl);
-							// 			localStorage.setItem("prodValuecu", prodpl);
+            var savedShift = localStorage.getItem("selectedShiftCU");
+            var savedDate = localStorage.getItem("selectedShiftDateCU");
+            var today = new Date().toDateString();
 
-							// 			intVal = 0;
-							// 			targInput.value = intVal;
-							// 			updateIntValDisplay();
-							// 			localStorage.setItem("intValcu", intVal);
+            if (savedShift && savedDate === today) {
+                applyShiftSelection(savedShift);
+            } else {
+                showShiftSelectModal();
+            }
 
-							// 			reloadPage()
-							// 		}
-							// 	} else {
-							// 		labelcs.textContent = "Total Product : ";
-							// 		valuecs.textContent = "@latestTotalUnit";
-							// 		var currentTime = new Date();
-							// 		if ((currentTime.getHours() === 10 && currentTime.getMinutes() === 30 && currentTime.getSeconds() < 20) || (currentTime.getHours() === 16 && currentTime.getMinutes() === 0 && currentTime.getSeconds() < 20)) {
-							// 			operat = 0;
-							// 			opInput.value = operat;
-							// 			updateOPDisplay(operat);
-							// 			localStorage.setItem("opValuecu", operat);
-
-							// 			prodpl = 0;
-							// 			prodInput.value = prodpl;
-							// 			updatePPDisplay(prodpl);
-							// 			localStorage.setItem("prodValuecu", prodpl);
-
-							// 			intVal = 0;
-							// 			targInput.value = intVal;
-							// 			updateIntValDisplay();
-							// 			localStorage.setItem("intValcu", intVal);
-
-							// 			reloadPage()
-							// 		}
-							// 	}   
-							// }
-							// ceklosstime
-							// setInterval(checkLossTime, 2000);
-							// Call the toggleSwitch function on page load to initialize the switch button state
-							// toggleSwitch(); Nama fungsi disesuaikan
-							// addIdle();
-
-							// function reloadPage() {
-							// 	location.reload();
-							// }
-
-							// Cek ini menyebabkan error jika modal_container tidak ada, sebaiknya dihapus jika tidak ada elemennya
-							// if (operat == 0 || prodpl == 0 || operat == null || prodpl == null) {
-							//     modal_container.classList.add('show');
-							// }
-
-							// setInterval(updateVariable, 900);
-
-							// intVal = parseInt(localStorage.getItem("intValcu")) || 0;
-							// updateIntValDisplay();
-
-							// ================================================================
-							// AKHIR BLOK PERUBAHAN JAVASCRIPT
-							// ================================================================
-						});
-					</script>
+            setInterval(checkShiftBoundary, 30000); // cek tiap 30 detik
+            setInterval(updateVariable, 900);
+            intVal = parseInt(localStorage.getItem("intValcu")) || 0;
+            updateIntValDisplay();
+        });
+    </script>
     }

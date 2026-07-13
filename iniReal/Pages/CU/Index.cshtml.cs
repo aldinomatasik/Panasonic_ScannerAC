@@ -1,4 +1,4 @@
-using iniReal.Pages.CS;
+﻿using iniReal.Pages.CS;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Data.SqlClient;
@@ -120,28 +120,36 @@ namespace iniReal.Pages.CU
                             while (userQrReader.Read())
                             {
                                 UserInfo userInfo = new UserInfo();
-                                userInfo.Date = userQrReader.GetDateTime(0);
-                                userInfo.SDate = userQrReader.GetDateTime(1);
-                                userInfo.EndDate = userQrReader.GetDateTime(2);
-                                userInfo.ProductTime = userQrReader.GetDecimal(3);
-                                userInfo.TotalDownTime = userQrReader.GetDecimal(4);
-                                userInfo.TargetUnit = userQrReader.GetDecimal(5);
-                                userInfo.GoodUnit = userQrReader.GetDecimal(6);
-                                userInfo.EjectUnit = userQrReader.GetDecimal(7);
-                                userInfo.TotalUnit = userQrReader.GetDecimal(8);
-                                userInfo.OEE = userQrReader.GetDecimal(9);
-                                userInfo.Availability = userQrReader.GetDecimal(10);
-                                userInfo.Performance = userQrReader.GetDecimal(11);
-                                userInfo.Quality = userQrReader.GetDecimal(12);
-                                userInfo.CycleTime = userQrReader.GetInt32(13);
-                                userInfo.MachineCode = userQrReader.GetString(14);
-                                userInfo.Product_Id = userQrReader.GetString(15);
-                                userInfo.NoOfOperator = userQrReader.GetInt32(16);
-                                userInfo.P_Target = userQrReader.GetDecimal(17);
-                                userInfo.P_Actual = userQrReader.GetDecimal(18);
-                                userInfo.IdleTime = userQrReader.GetDecimal(19);
-                                userInfo.SN_GOOD = userQrReader.GetString(20);
-                                userInfo.ID = userQrReader.GetInt32(21);
+
+                                // Gunakan pengecekan IsDBNull untuk setiap kolom
+                                if (!userQrReader.IsDBNull(0)) userInfo.Date = userQrReader.GetDateTime(0);
+                                if (!userQrReader.IsDBNull(1)) userInfo.SDate = userQrReader.GetDateTime(1);
+                                if (!userQrReader.IsDBNull(2)) userInfo.EndDate = userQrReader.GetDateTime(2);
+
+                                // Untuk Decimal, Int, dan String lainnya juga harus dicek:
+                                if (!userQrReader.IsDBNull(3)) userInfo.ProductTime = userQrReader.GetDecimal(3);
+                                if (!userQrReader.IsDBNull(4)) userInfo.TotalDownTime = userQrReader.GetDecimal(4);
+                                if (!userQrReader.IsDBNull(5)) userInfo.TargetUnit = userQrReader.GetDecimal(5);
+                                if (!userQrReader.IsDBNull(6)) userInfo.GoodUnit = userQrReader.GetDecimal(6);
+                                if (!userQrReader.IsDBNull(7)) userInfo.EjectUnit = userQrReader.GetDecimal(7);
+                                if (!userQrReader.IsDBNull(8)) userInfo.TotalUnit = userQrReader.GetDecimal(8);
+                                if (!userQrReader.IsDBNull(9)) userInfo.OEE = userQrReader.GetDecimal(9);
+                                if (!userQrReader.IsDBNull(10)) userInfo.Availability = userQrReader.GetDecimal(10);
+                                if (!userQrReader.IsDBNull(11)) userInfo.Performance = userQrReader.GetDecimal(11);
+                                if (!userQrReader.IsDBNull(12)) userInfo.Quality = userQrReader.GetDecimal(12);
+                                if (!userQrReader.IsDBNull(13)) userInfo.CycleTime = userQrReader.GetInt32(13);
+
+                                // Gunakan IsDBNull untuk string
+                                if (!userQrReader.IsDBNull(14)) userInfo.MachineCode = userQrReader.GetString(14);
+                                if (!userQrReader.IsDBNull(15)) userInfo.Product_Id = userQrReader.GetString(15);
+
+                                if (!userQrReader.IsDBNull(16)) userInfo.NoOfOperator = userQrReader.GetInt32(16);
+                                if (!userQrReader.IsDBNull(17)) userInfo.P_Target = userQrReader.GetDecimal(17);
+                                if (!userQrReader.IsDBNull(18)) userInfo.P_Actual = userQrReader.GetDecimal(18);
+                                if (!userQrReader.IsDBNull(19)) userInfo.IdleTime = userQrReader.GetDecimal(19);
+
+                                if (!userQrReader.IsDBNull(20)) userInfo.SN_GOOD = userQrReader.GetString(20);
+                                if (!userQrReader.IsDBNull(21)) userInfo.ID = userQrReader.GetInt32(21);
 
                                 listUsers.Add(userInfo);
                             }
@@ -157,11 +165,17 @@ namespace iniReal.Pages.CU
 
         public bool IsSnSequential(string currentSN, string previousSN)
         {
-            double currentNum = double.Parse(currentSN);
-            double previousNum = double.Parse(previousSN);
-            return currentNum == previousNum + 1;
-        }
+            // Hilangkan prefix huruf sebelum parse
+            string cleanCurrent = currentSN.TrimStart('F', 'f');
+            string cleanPrevious = previousSN.TrimStart('F', 'f');
 
+            if (double.TryParse(cleanCurrent, out double currentNum) &&
+                double.TryParse(cleanPrevious, out double previousNum))
+            {
+                return currentNum == previousNum + 1;
+            }
+            return true; // Kalau tidak bisa parse, skip warning
+        }
         public async Task<IActionResult> OnPostAsync()
         {
             // 1. Bagian validasi input
@@ -169,6 +183,54 @@ namespace iniReal.Pages.CU
             string operatInput = Request.Form["OP"];
             string prodPlanInput = Request.Form["PP"];
             string idleInput = Request.Form["IT"];
+            string shiftModeInput = Request.Form["ShiftMode"];
+            string currentShiftMode;
+
+            // ==== PENENTUAN SHIFT / OVERTIME ====
+            // shiftModeInput yang dikirim FE sekarang berupa kode periode yang dipilih user
+            // lewat popup: "NS", "1", "2", "3". Backend adalah sumber kebenaran:
+            // jika jam saat ini TIDAK berada dalam window periode yang dipilih,
+            // otomatis dicatat sebagai OVERTIME.
+            DateTime now = DateTime.Now;
+
+            DateTime nsStart = now.Date.AddHours(7);
+            DateTime nsEnd = now.Date.AddHours(16);
+
+            DateTime shift1Start = now.Date.AddHours(7);
+            DateTime shift1End = now.Date.AddHours(15).AddMinutes(45);
+            DateTime shift2Start = now.Date.AddHours(15).AddMinutes(45);
+            DateTime shift2End = now.Date.AddHours(23);
+            DateTime shift3Start = now.Date.AddHours(23);
+            DateTime shift3End = now.Date.AddDays(1).AddHours(7);
+            DateTime shift3Start2 = now.Date.AddDays(-1).AddHours(23);
+            DateTime shift3End2 = now.Date.AddHours(7);
+
+            bool isWithinWindow;
+
+            switch (shiftModeInput)
+            {
+                case "NS":
+                    isWithinWindow = now >= nsStart && now < nsEnd;
+                    currentShiftMode = isWithinWindow ? "NON-SHIFT" : "OVERTIME";
+                    break;
+                case "1":
+                    isWithinWindow = now >= shift1Start && now < shift1End;
+                    currentShiftMode = isWithinWindow ? "SHIFT 1" : "OVERTIME";
+                    break;
+                case "2":
+                    isWithinWindow = now >= shift2Start && now < shift2End;
+                    currentShiftMode = isWithinWindow ? "SHIFT 2" : "OVERTIME";
+                    break;
+                case "3":
+                    isWithinWindow = (now >= shift3Start && now < shift3End) || (now >= shift3Start2 && now < shift3End2);
+                    currentShiftMode = isWithinWindow ? "SHIFT 3" : "OVERTIME";
+                    break;
+                default:
+                    // Tidak ada periode terpilih / nilai tidak dikenali -> catat sebagai OVERTIME
+                    currentShiftMode = "OVERTIME";
+                    break;
+            }
+            // ==== END PENENTUAN SHIFT / OVERTIME ====
 
             if (!string.IsNullOrEmpty(serialNumInput) && serialNumInput.Contains("ERROR"))
             {
@@ -182,10 +244,19 @@ namespace iniReal.Pages.CU
                 {
                     serialNumInput = serialNumInput.Substring(indexOfPercent + 1);
                 }
+
+                // Jaga-jaga jika masih ada % (double scan)
+                int secondPercent = serialNumInput.IndexOf("%");
+                if (secondPercent != -1)
+                {
+                    serialNumInput = serialNumInput.Substring(0, secondPercent);
+                }
             }
 
             // UPDATE: Menambahkan panjang 23 ke dalam validasi agar contoh SN Anda bisa masuk
-            if (serialNumInput?.Length != 10 && serialNumInput?.Length != 11 && serialNumInput?.Length != 21 && serialNumInput?.Length != 23)
+            if (serialNumInput?.Length != 10 && serialNumInput?.Length != 11
+    && serialNumInput?.Length != 21 && serialNumInput?.Length != 22  // ← tambah ini
+    && serialNumInput?.Length != 23)
             {
                 TempData["ErrorMessage"] = "Serial Number Tidak valid (Panjang: " + serialNumInput?.Length + ")";
                 return RedirectToPage();
@@ -217,39 +288,41 @@ namespace iniReal.Pages.CU
                     // 2. Logika untuk mendapatkan detail produk (DIPERBARUI)
                     // Menambahkan logika pencarian berdasarkan karakter ke-7 s.d 11
                     string selectDataSql = @"
-        SELECT TOP 1 Product_Id, MachineCode, SUT FROM Masterdata
-        WHERE MachineCode = @MachineCode AND
-              (Product_Id LIKE @EmbeddedPrefix + '%' OR -- Logika Baru
-               Product_Id LIKE @SerialNumPrefix7 + '%' OR
-               Product_Id LIKE @SerialNumPrefix5 + '%' OR
-               Product_Id = @SerialNumPrefix3)
-        ORDER BY CASE
-            WHEN Product_Id LIKE @EmbeddedPrefix + '%' THEN 1 -- Prioritas Utama
-            WHEN Product_Id LIKE @SerialNumPrefix7 + '%' THEN 2
-            WHEN Product_Id LIKE @SerialNumPrefix5 + '%' THEN 3
-            WHEN Product_Id = @SerialNumPrefix3 THEN 4
-            ELSE 5
-        END;";
+SELECT TOP 1 Product_Id, MachineCode, SUT FROM Masterdata
+WHERE MachineCode = @MachineCode AND
+      ((@EmbeddedPrefix <> '' AND Product_Id LIKE @EmbeddedPrefix + '%') OR
+       Product_Id LIKE @SerialNumPrefix7 + '%' OR
+       Product_Id LIKE @SerialNumPrefix5 + '%' OR
+       Product_Id = @SerialNumPrefix3)
+ORDER BY CASE
+    WHEN @EmbeddedPrefix <> '' AND Product_Id LIKE @EmbeddedPrefix + '%' THEN 1
+    WHEN Product_Id LIKE @SerialNumPrefix7 + '%' THEN 2
+    WHEN Product_Id LIKE @SerialNumPrefix5 + '%' THEN 3
+    WHEN Product_Id = @SerialNumPrefix3 THEN 4
+    ELSE 5
+END;";
 
                     int SUT = 0;
                     using (SqlCommand selectDataCommand = new SqlCommand(selectDataSql, connection))
                     {
                         string serialNum = iniUser.SN_GOOD;
 
-                        // LOGIKA BARU: Ambil karakter ke-7 sampai 11 (index 6, panjang 5)
-                        // Contoh: 140202BFDCW7225CD000002 => Ambil "BFDCW"
                         string embeddedPrefix = "";
                         if (serialNum.Length >= 11)
                         {
-                            embeddedPrefix = serialNum.Substring(6, 5);
+                            embeddedPrefix = serialNum.Substring(6, 5).ToUpper();
                         }
 
                         selectDataCommand.Parameters.AddWithValue("@MachineCode", MachineCode);
-                        selectDataCommand.Parameters.AddWithValue("@EmbeddedPrefix", embeddedPrefix); // Parameter Baru
-                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix7", serialNum.Length >= 7 ? serialNum.Substring(0, 7) : serialNum);
-                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix5", serialNum.Length >= 5 ? serialNum.Substring(0, 5) : serialNum);
-                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix3", serialNum.Length >= 3 ? serialNum.Substring(0, 3) : serialNum);
+                        selectDataCommand.Parameters.AddWithValue("@EmbeddedPrefix", embeddedPrefix);
+                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix7",
+                            (serialNum.Length >= 7 ? serialNum.Substring(0, 7) : serialNum).ToUpper());
+                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix5",
+                            (serialNum.Length >= 5 ? serialNum.Substring(0, 5) : serialNum).ToUpper());
+                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix3",
+                            (serialNum.Length >= 3 ? serialNum.Substring(0, 3) : serialNum).ToUpper());
 
+                        // INI YANG HILANG - tambahkan kembali
                         using (SqlDataReader dataReader = await selectDataCommand.ExecuteReaderAsync())
                         {
                             if (await dataReader.ReadAsync())
@@ -258,6 +331,8 @@ namespace iniReal.Pages.CU
                                 iniUser.MachineCode = dataReader.GetString(1);
                             }
                         }
+
+                        Console.WriteLine($"[DEBUG] Product_Id hasil query: '{iniUser.Product_Id}'");
                     }
 
                     // Jika SUT tidak ada di query pertama, ambil secara terpisah
@@ -267,6 +342,18 @@ namespace iniReal.Pages.CU
                         selectSUTCommand.Parameters.AddWithValue("@Product_Id", iniUser.Product_Id);
                         var sutResult = await selectSUTCommand.ExecuteScalarAsync();
                         if (sutResult != null) SUT = (int)sutResult;
+                    }
+                    string checkDuplicateSql = "SELECT COUNT(*) FROM OEESN WHERE SN_GOOD = @SN_GOOD AND MachineCode = @MachineCode";
+                    using (SqlCommand checkDupCmd = new SqlCommand(checkDuplicateSql, connection))
+                    {
+                        checkDupCmd.Parameters.AddWithValue("@SN_GOOD", iniUser.SN_GOOD);
+                        checkDupCmd.Parameters.AddWithValue("@MachineCode", MachineCode);
+                        int existingCount = (int)await checkDupCmd.ExecuteScalarAsync();
+                        if (existingCount > 0)
+                        {
+                            TempData["ErrorMessage"] = $"⚠️ DUPLIKAT! Serial Number '{iniUser.SN_GOOD}' sudah pernah discan sebelumnya!";
+                            return RedirectToPage();
+                        }
                     }
 
                     // --- BAGIAN BAWAH TETAP SAMA SEPERTI KODE ASLI ---
@@ -331,9 +418,9 @@ namespace iniReal.Pages.CU
                     }
 
                     string insertUserQrSql = @"INSERT INTO OEESN (Date, SDate, EndDate, ProductTime, TotalDownTime, TargetUnit, GoodUnit, EjectUnit, TotalUnit, OEE, 
-                                   Availability, Performance, Quality, CycleTime, MachineCode, Product_Id, NoOfOperator, P_Target, P_Actual, IdleTime, SN_GOOD) 
-                                   VALUES (@Date, @SDate, @EndDate, @ProductTime, @TotalDownTime, @TargetUnit, @GoodUnit, @EjectUnit, (@GoodUnit + @EjectUnit), @OEE, 
-                                   @Availability, @Performance, @Quality, @CycleTime, @MachineCode, @Product_Id, @NoOfOperator, @P_Target, @P_Actual, @IdleTime, @SN_GOOD);";
+                   Availability, Performance, Quality, CycleTime, MachineCode, Product_Id, NoOfOperator, P_Target, P_Actual, IdleTime, SN_GOOD, ShiftMode) 
+                   VALUES (@Date, @SDate, @EndDate, @ProductTime, @TotalDownTime, @TargetUnit, @GoodUnit, @EjectUnit, (@GoodUnit + @EjectUnit), @OEE, 
+                   @Availability, @Performance, @Quality, @CycleTime, @MachineCode, @Product_Id, @NoOfOperator, @P_Target, @P_Actual, @IdleTime, @SN_GOOD, @ShiftMode);";
 
                     using (SqlCommand insertUserQrCommand = new SqlCommand(insertUserQrSql, connection))
                     {
@@ -377,6 +464,7 @@ namespace iniReal.Pages.CU
                         insertUserQrCommand.Parameters.AddWithValue("@P_Actual", p_actual);
                         insertUserQrCommand.Parameters.AddWithValue("@IdleTime", idleValue);
                         insertUserQrCommand.Parameters.AddWithValue("@SN_GOOD", iniUser.SN_GOOD);
+                        insertUserQrCommand.Parameters.AddWithValue("@ShiftMode", currentShiftMode);
 
                         await insertUserQrCommand.ExecuteNonQueryAsync();
                     }
@@ -679,44 +767,6 @@ namespace iniReal.Pages.CU
             public TimeSpan Start { get; set; }
             public TimeSpan End { get; set; }
         }
-        ///// Mendapatkan daftar waktu istirahat berdasarkan hari.
-        //private List<RestPeriod> GetRestPeriods(DateTime forDate)
-        //{
-        //    var periods = new List<RestPeriod>();
-
-        //    // Pengecualian untuk hari Jumat
-        //    if (forDate.DayOfWeek == DayOfWeek.Friday)
-        //    {
-        //        // Istirahat Shift 1 (Jumat)
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(9, 30, 0), End = new TimeSpan(9, 35, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(11, 50, 0), End = new TimeSpan(13, 15, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(14, 30, 0), End = new TimeSpan(14, 35, 0) });
-
-        //        // Tambahan Istirahat Shift 2
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(18, 0, 0), End = new TimeSpan(18, 30, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(21, 0, 0), End = new TimeSpan(21, 45, 0) });
-
-        //        // Tambahan Istirahat Shift 3
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(3, 0, 0), End = new TimeSpan(3, 15, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(5, 0, 0), End = new TimeSpan(5, 30, 0) });
-        //    }
-        //    else // Untuk hari-hari kerja lainnya
-        //    {
-        //        // Istirahat Shift 1 (Normal)
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(9, 30, 0), End = new TimeSpan(9, 35, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(12, 0, 0), End = new TimeSpan(12, 45, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(14, 30, 0), End = new TimeSpan(14, 35, 0) });
-
-        //        // Tambahan Istirahat Shift 2
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(18, 0, 0), End = new TimeSpan(18, 30, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(21, 0, 0), End = new TimeSpan(21, 45, 0) });
-
-        //        // Tambahan Istirahat Shift 3
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(3, 0, 0), End = new TimeSpan(3, 15, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(5, 0, 0), End = new TimeSpan(5, 30, 0) });
-        //    }
-        //    return periods;
-        //}
         /// Menghitung durasi downtime bersih dalam detik, dengan mengabaikan waktu istirahat.
         private double CalculateNetDowntimeSeconds(DateTime startTime, DateTime endTime)
         {
@@ -753,7 +803,7 @@ namespace iniReal.Pages.CU
 
     }
 
-        public class ProductInfo
+    public class ProductInfo
     {
         public string? Product_Id { get; set; }
         public string? Marking { get; set; }

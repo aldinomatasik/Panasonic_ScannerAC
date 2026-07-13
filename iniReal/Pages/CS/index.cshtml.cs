@@ -166,33 +166,51 @@ namespace iniReal.Pages.CS
             string shiftModeInput = Request.Form["ShiftMode"];
             string currentShiftMode;
 
-            if (shiftModeInput == "true")
-            {
-                // Mode SHIFT aktif → Deteksi shift berapa
-                DateTime now = DateTime.Now;
-                DateTime shift1Start = now.Date.AddHours(7);
-                DateTime shift1End = now.Date.AddHours(15).AddMinutes(45);
-                DateTime shift2Start = now.Date.AddHours(15).AddMinutes(45);
-                DateTime shift2End = now.Date.AddHours(23);
-                DateTime shift3Start = now.Date.AddHours(23);
-                DateTime shift3End = now.Date.AddDays(1).AddHours(7);
-                DateTime shift3Start2 = now.Date.AddDays(-1).AddHours(23);
-                DateTime shift3End2 = now.Date.AddHours(7);
+            // ==== PENENTUAN SHIFT / OVERTIME ====
+            // shiftModeInput yang dikirim FE sekarang berupa kode periode yang dipilih user
+            // lewat popup: "NS", "1", "2", "3". Backend adalah sumber kebenaran:
+            // jika jam saat ini TIDAK berada dalam window periode yang dipilih,
+            // otomatis dicatat sebagai OVERTIME.
+            DateTime now = DateTime.Now;
 
-                if (now >= shift1Start && now < shift1End)
-                    currentShiftMode = "SHIFT 1";
-                else if (now >= shift2Start && now < shift2End)
-                    currentShiftMode = "SHIFT 2";
-                else if ((now >= shift3Start && now < shift3End) || (now >= shift3Start2 && now < shift3End2))
-                    currentShiftMode = "SHIFT 3";
-                else
-                    currentShiftMode = "SHIFT"; // Fallback kalau di luar jam shift
-            }
-            else
+            DateTime nsStart = now.Date.AddHours(7);
+            DateTime nsEnd = now.Date.AddHours(16);
+
+            DateTime shift1Start = now.Date.AddHours(7);
+            DateTime shift1End = now.Date.AddHours(15).AddMinutes(45);
+            DateTime shift2Start = now.Date.AddHours(15).AddMinutes(45);
+            DateTime shift2End = now.Date.AddHours(23);
+            DateTime shift3Start = now.Date.AddHours(23);
+            DateTime shift3End = now.Date.AddDays(1).AddHours(7);
+            DateTime shift3Start2 = now.Date.AddDays(-1).AddHours(23);
+            DateTime shift3End2 = now.Date.AddHours(7);
+
+            bool isWithinWindow;
+
+            switch (shiftModeInput)
             {
-                // Mode OVERTIME
-                currentShiftMode = "OVERTIME";
+                case "NS":
+                    isWithinWindow = now >= nsStart && now < nsEnd;
+                    currentShiftMode = isWithinWindow ? "NON-SHIFT" : "OVERTIME";
+                    break;
+                case "1":
+                    isWithinWindow = now >= shift1Start && now < shift1End;
+                    currentShiftMode = isWithinWindow ? "SHIFT 1" : "OVERTIME";
+                    break;
+                case "2":
+                    isWithinWindow = now >= shift2Start && now < shift2End;
+                    currentShiftMode = isWithinWindow ? "SHIFT 2" : "OVERTIME";
+                    break;
+                case "3":
+                    isWithinWindow = (now >= shift3Start && now < shift3End) || (now >= shift3Start2 && now < shift3End2);
+                    currentShiftMode = isWithinWindow ? "SHIFT 3" : "OVERTIME";
+                    break;
+                default:
+                    // Tidak ada periode terpilih / nilai tidak dikenali -> catat sebagai OVERTIME
+                    currentShiftMode = "OVERTIME";
+                    break;
             }
+            // ==== END PENENTUAN SHIFT / OVERTIME ====
 
             if (!string.IsNullOrEmpty(serialNumInput) && serialNumInput.Contains("ERROR"))
             {
@@ -206,10 +224,30 @@ namespace iniReal.Pages.CS
                 {
                     serialNumInput = serialNumInput.Substring(indexOfPercent + 1);
                 }
+
+                // Jaga-jaga jika masih ada % (double scan)
+                int secondPercent = serialNumInput.IndexOf("%");
+                if (secondPercent != -1)
+                {
+                    serialNumInput = serialNumInput.Substring(0, secondPercent);
+                }
             }
 
             // UPDATE: Menambahkan panjang 23 ke dalam validasi agar contoh SN Anda bisa masuk
-            if (serialNumInput?.Length != 10 && serialNumInput?.Length != 11 && serialNumInput?.Length != 21 && serialNumInput?.Length != 23)
+            // Hapus spasi
+            if (!string.IsNullOrEmpty(serialNumInput))
+                serialNumInput = serialNumInput.Replace(" ", "");
+
+            // Skip EAN (13 digit angka murni)
+            if (!string.IsNullOrEmpty(serialNumInput) && serialNumInput.Length == 13 && serialNumInput.All(char.IsDigit))
+            {
+                TempData["ErrorMessage"] = "";
+                return RedirectToPage();
+            }
+
+            if (serialNumInput?.Length != 10 && serialNumInput?.Length != 11
+                && serialNumInput?.Length != 21 && serialNumInput?.Length != 22
+                && serialNumInput?.Length != 23)
             {
                 TempData["ErrorMessage"] = "Serial Number Tidak valid (Panjang: " + serialNumInput?.Length + ")";
                 return RedirectToPage();
@@ -239,40 +277,31 @@ namespace iniReal.Pages.CS
                     await connection.OpenAsync();
 
                     // 2. Logika untuk mendapatkan detail produk (DIPERBARUI)
-                    // Menambahkan logika pencarian berdasarkan karakter ke-7 s.d 11
                     string selectDataSql = @"
-        SELECT TOP 1 Product_Id, MachineCode, SUT FROM Masterdata
-        WHERE MachineCode = @MachineCode AND
-              (
-               Product_Id LIKE @SerialNumPrefix7 + '%' OR
-               Product_Id LIKE @SerialNumPrefix5 + '%' OR
-               Product_Id = @SerialNumPrefix3)
-        ORDER BY CASE
-          
-            WHEN Product_Id LIKE @SerialNumPrefix7 + '%' THEN 2
-            WHEN Product_Id LIKE @SerialNumPrefix5 + '%' THEN 3
-            WHEN Product_Id = @SerialNumPrefix3 THEN 4
-            ELSE 5
-        END;";
-
+SELECT TOP 1 Product_Id, MachineCode, SUT FROM Masterdata
+WHERE MachineCode = @MachineCode AND
+      (
+       Product_Id LIKE @SerialNumPrefix7 + '%' OR
+       Product_Id LIKE @SerialNumPrefix5 + '%' OR
+       Product_Id = @SerialNumPrefix3)
+ORDER BY CASE
+    WHEN Product_Id LIKE @SerialNumPrefix7 + '%' THEN 2
+    WHEN Product_Id LIKE @SerialNumPrefix5 + '%' THEN 3
+    WHEN Product_Id = @SerialNumPrefix3 THEN 4
+    ELSE 5
+END;";
                     int SUT = 0;
                     using (SqlCommand selectDataCommand = new SqlCommand(selectDataSql, connection))
                     {
                         string serialNum = iniUser.SN_GOOD;
 
-                        // LOGIKA BARU: Ambil karakter ke-7 sampai 11 (index 6, panjang 5)
-                        // Contoh: 140202BFDCW7225CD000002 => Ambil "BFDCW"
-                        //string embeddedPrefix = "";
-                        //if (serialNum.Length >= 11)
-                        //{
-                        //    embeddedPrefix = serialNum.Substring(6, 5);
-                        //}
-
                         selectDataCommand.Parameters.AddWithValue("@MachineCode", MachineCode);
-                        //selectDataCommand.Parameters.AddWithValue("@EmbeddedPrefix", embeddedPrefix); // Parameter Baru
-                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix7", serialNum.Length >= 7 ? serialNum.Substring(0, 7) : serialNum);
-                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix5", serialNum.Length >= 5 ? serialNum.Substring(0, 5) : serialNum);
-                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix3", serialNum.Length >= 3 ? serialNum.Substring(0, 3) : serialNum);
+                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix7",
+                            (serialNum.Length >= 7 ? serialNum.Substring(0, 7) : serialNum).ToUpper());
+                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix5",
+                            (serialNum.Length >= 5 ? serialNum.Substring(0, 5) : serialNum).ToUpper());
+                        selectDataCommand.Parameters.AddWithValue("@SerialNumPrefix3",
+                            (serialNum.Length >= 3 ? serialNum.Substring(0, 3) : serialNum).ToUpper());
 
                         using (SqlDataReader dataReader = await selectDataCommand.ExecuteReaderAsync())
                         {
@@ -282,6 +311,7 @@ namespace iniReal.Pages.CS
                                 iniUser.MachineCode = dataReader.GetString(1);
                             }
                         }
+                        Console.WriteLine($"[DEBUG] Product_Id hasil query: '{iniUser.Product_Id}'");
                     }
 
                     // Jika SUT tidak ada di query pertama, ambil secara terpisah
@@ -292,7 +322,18 @@ namespace iniReal.Pages.CS
                         var sutResult = await selectSUTCommand.ExecuteScalarAsync();
                         if (sutResult != null) SUT = (int)sutResult;
                     }
-
+                    string checkDuplicateSql = "SELECT COUNT(*) FROM OEESN WHERE SN_GOOD = @SN_GOOD AND MachineCode = @MachineCode";
+                    using (SqlCommand checkDupCmd = new SqlCommand(checkDuplicateSql, connection))
+                    {
+                        checkDupCmd.Parameters.AddWithValue("@SN_GOOD", iniUser.SN_GOOD);
+                        checkDupCmd.Parameters.AddWithValue("@MachineCode", MachineCode);
+                        int existingCount = (int)await checkDupCmd.ExecuteScalarAsync();
+                        if (existingCount > 0)
+                        {
+                            TempData["ErrorMessage"] = $"⚠️ DUPLIKAT! Serial Number '{iniUser.SN_GOOD}' sudah pernah discan sebelumnya!";
+                            return RedirectToPage();
+                        }
+                    }
                     // --- BAGIAN BAWAH TETAP SAMA SEPERTI KODE ASLI ---
                     int cycleTime = (operatValue > 0) ? (SUT * 60 / operatValue) : 0;
                     decimal idleValue = 0;
@@ -425,22 +466,20 @@ namespace iniReal.Pages.CS
 
                                 if (serialnumbers[0].Length >= 21 && serialnumbers[1].Length >= 21)
                                 {
-                                    // Mengambil 6 digit terakhir untuk cek urutan
                                     currentsn = serialnumbers[0].Substring(serialnumbers[0].Length - 6);
                                     previoussn = serialnumbers[1].Substring(serialnumbers[1].Length - 6);
                                     if (!IsSnSequential(currentsn, previoussn))
                                     {
-                                        TempData["errormessage"] = "Serial Number tidak Berurutan";
+                                        TempData["ErrorMessage"] = "Serial Number tidak Berurutan";
                                     }
                                 }
-                                // Fallback logic lama
                                 else if (serialnumbers[0].Substring(0, 1).Equals('F') && serialnumbers[1].Substring(0, 1).Equals('F') || serialnumbers[0].Substring(0, 1).Equals('f') && serialnumbers[1].Substring(0, 1).Equals('f'))
                                 {
                                     currentsn = serialnumbers[0].Substring(1);
                                     previoussn = serialnumbers[1].Substring(1);
                                     if (!IsSnSequential(currentsn, previoussn))
                                     {
-                                        TempData["errormessage"] = "Serial Number tidak Berurutan";
+                                        TempData["ErrorMessage"] = "Serial Number tidak Berurutan";
                                     }
                                 }
                                 else
@@ -449,7 +488,7 @@ namespace iniReal.Pages.CS
                                     previoussn = serialnumbers[1];
                                     if (!IsSnSequential(currentsn, previoussn))
                                     {
-                                        TempData["errormessage"] = "Serial Number tidak Berurutan";
+                                        TempData["ErrorMessage"] = "Serial Number tidak Berurutan";
                                     }
                                 }
                             }
@@ -517,79 +556,6 @@ namespace iniReal.Pages.CS
                 return (int)countDataCommand.ExecuteScalar() + 1;
             }
         }
-
-        //public async Task<IActionResult> OnPostSaveLossTimeAsync()
-        //{
-
-        //    string reasonInput = Request.Form["LossTimeReason"];
-        //    if (string.IsNullOrEmpty(reasonInput))
-        //    {
-        //        ModelState.AddModelError("LossTimeReason", "Penyebab LossTime tidak boleh kosong!");
-        //        return Page(); // Kembali ke halaman dengan error
-        //    }
-
-        //    try
-        //    {
-        //        using (SqlConnection connection = new SqlConnection(_connectionString))
-        //        {
-        //            await connection.OpenAsync();
-
-        //            string getLastSDateSql = @"
-        //        SELECT TOP 1 SDate FROM OEESN 
-        //        WHERE MachineCode = @MachineCode 
-        //        ORDER BY SDate DESC";
-
-        //            using (SqlCommand command = new SqlCommand(getLastSDateSql, connection))
-        //            {
-        //                command.Parameters.AddWithValue("@MachineCode", "MCH1-02");
-
-        //                using (SqlDataReader reader = await command.ExecuteReaderAsync())
-        //                {
-        //                    if (reader.Read())
-        //                    {
-        //                        TStartLossVal = reader.GetDateTime(0);
-        //                    }
-        //                }
-        //            }
-        //        }
-
-        //        // Simpan reason loss
-        //        RlossVal = reasonInput;
-
-        //        // Kirim data ke View
-        //        TempData["Message"] = "LossTime disimpan, menunggu produk baru...";
-        //        TempData["ReasonLoss"] = RlossVal;
-        //        TempData["StartTime"] = TStartLossVal;
-
-        //        return RedirectToPage(); // Kembali ke halaman dengan ViewData
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return BadRequest("Terjadi kesalahan: " + ex.Message);
-        //    }
-        //}
-
-        // Buat method baru untuk dipanggil dari UI
-        //public async Task<IActionResult> OnPostSaveReasonAsync([FromBody] LossTimeRequest request)
-        //{
-        //    try
-        //    {
-        //        (DateTime? tStartLoss, string? discardedReason) = await _lossTimeService.GetLastSDateAndReasonAsync("MCH1-02"); // MachineCode untuk CS
-        //        if (tStartLoss.HasValue)
-        //        {
-        //            await _lossTimeService.SaveLossTimeAsync(request.LossTimeReason, "MCH1-02", tStartLoss.Value);
-        //            return new OkResult();
-        //        }
-        //        return new BadRequestObjectResult("Could not find start time for loss.");
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return new BadRequestObjectResult(ex.Message);
-        //    }
-        //}
-
-        /// Kelas sederhana untuk menampung waktu mulai dan selesai istirahat.
-        /// 
 
         /// Mendapatkan daftar waktu istirahat berdasarkan hari.
         private List<RestPeriod> GetRestPeriods(DateTime forDate)
@@ -706,44 +672,7 @@ namespace iniReal.Pages.CS
             public TimeSpan Start { get; set; }
             public TimeSpan End { get; set; }
         }
-        /// Mendapatkan daftar waktu istirahat berdasarkan hari.
-        //private List<RestPeriod> GetRestPeriods(DateTime forDate)
-        //{
-        //    var periods = new List<RestPeriod>();
 
-        //    // Pengecualian untuk hari Jumat
-        //    if (forDate.DayOfWeek == DayOfWeek.Friday)
-        //    {
-        //        // Istirahat Shift 1 (Jumat)
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(9, 30, 0), End = new TimeSpan(9, 35, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(11, 50, 0), End = new TimeSpan(13, 15, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(14, 30, 0), End = new TimeSpan(14, 35, 0) });
-
-        //        // Tambahan Istirahat Shift 2
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(18, 0, 0), End = new TimeSpan(18, 30, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(21, 0, 0), End = new TimeSpan(21, 45, 0) });
-
-        //        // Tambahan Istirahat Shift 3
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(3, 0, 0), End = new TimeSpan(3, 15, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(5, 0, 0), End = new TimeSpan(5, 30, 0) });
-        //    }
-        //    else // Untuk hari-hari kerja lainnya
-        //    {
-        //        // Istirahat Shift 1 (Normal)
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(9, 30, 0), End = new TimeSpan(9, 35, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(12, 0, 0), End = new TimeSpan(12, 45, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(14, 30, 0), End = new TimeSpan(14, 35, 0) });
-
-        //        // Tambahan Istirahat Shift 2
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(18, 0, 0), End = new TimeSpan(18, 30, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(21, 0, 0), End = new TimeSpan(21, 45, 0) });
-
-        //        // Tambahan Istirahat Shift 3
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(3, 0, 0), End = new TimeSpan(3, 15, 0) });
-        //        periods.Add(new RestPeriod { Start = new TimeSpan(5, 0, 0), End = new TimeSpan(5, 30, 0) });
-        //    }
-        //    return periods;
-        //}
         /// Menghitung durasi downtime bersih dalam detik, dengan mengabaikan waktu istirahat.
         private double CalculateNetDowntimeSeconds(DateTime startTime, DateTime endTime)
         {
@@ -760,7 +689,7 @@ namespace iniReal.Pages.CS
                     DateTime restStart = day.Add(rest.Start);
                     DateTime restEnd = day.Add(rest.End);
 
-                    // 🔴 FIX SHIFT MALAM (melewati tengah malam)
+                    // FIX SHIFT MALAM (melewati tengah malam)
                     if (rest.End < rest.Start)
                     {
                         restEnd = restEnd.AddDays(1);
