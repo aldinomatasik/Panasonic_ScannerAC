@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Data.SqlClient;
 using System.IO.Ports;
@@ -363,14 +363,13 @@ END;";
                     if (idleDuration.TotalHours > 0 && idleDuration.TotalHours <= 2)
                     {
                         double netDowntimeSeconds = CalculateNetDowntimeSeconds(previousProductTime, currentProductTime);
-                        double toleranceSeconds = SUT * 5;
+                        double thresholdSeconds = cycleTime * 3;
 
-                        if (netDowntimeSeconds > toleranceSeconds)
+                        if (netDowntimeSeconds > thresholdSeconds)
                         {
-                            DateTime tentativeLossStart = SkipRestTime(previousProductTime.AddSeconds(toleranceSeconds));
+                            DateTime tentativeLossStart = SkipRestTime(previousProductTime.AddSeconds(cycleTime));
                             DateTime lossEndTime = currentProductTime;
-                            double actualLossSeconds = netDowntimeSeconds - toleranceSeconds;
-                            double pureLossSeconds = CalculateNetDowntimeSeconds(tentativeLossStart, lossEndTime);
+                            double pureLossSeconds = netDowntimeSeconds - cycleTime;
 
                             if (pureLossSeconds > 0)
                             {
@@ -380,13 +379,16 @@ END;";
                                     lossEndTime,
                                     pureLossSeconds
                                 );
-                                idleValue = (decimal)toleranceSeconds;
+                                idleValue = (decimal)cycleTime;
                             }
-                            idleValue = (decimal)(toleranceSeconds);
+                            else
+                            {
+                                idleValue = (decimal)cycleTime;
+                            }
                         }
                         else
                         {
-                            Console.WriteLine($"[INFO] Net Idle ({netDowntimeSeconds} detik) < Toleransi. Terpotong waktu istirahat.");
+                            Console.WriteLine($"[INFO] Net Idle ({netDowntimeSeconds} detik) <= {thresholdSeconds} (CycleTime x 3). Dianggap tidak ada Loss Time.");
                             idleValue = (decimal)(netDowntimeSeconds);
                         }
                     }
