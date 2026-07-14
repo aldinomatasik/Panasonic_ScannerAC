@@ -199,10 +199,10 @@ namespace iniReal.Pages.CU
             DateTime shift1Start = now.Date.AddHours(7);
             DateTime shift1End = now.Date.AddHours(15).AddMinutes(45);
             DateTime shift2Start = now.Date.AddHours(15).AddMinutes(45);
-            DateTime shift2End = now.Date.AddHours(23);
-            DateTime shift3Start = now.Date.AddHours(23);
+            DateTime shift2End = now.Date.AddHours(23).AddMinutes(15);
+            DateTime shift3Start = now.Date.AddHours(23).AddMinutes(15);
             DateTime shift3End = now.Date.AddDays(1).AddHours(7);
-            DateTime shift3Start2 = now.Date.AddDays(-1).AddHours(23);
+            DateTime shift3Start2 = now.Date.AddDays(-1).AddHours(23).AddMinutes(15);
             DateTime shift3End2 = now.Date.AddHours(7);
 
             bool isWithinWindow;
@@ -215,15 +215,15 @@ namespace iniReal.Pages.CU
                     break;
                 case "1":
                     isWithinWindow = now >= shift1Start && now < shift1End;
-                    currentShiftMode = isWithinWindow ? "SHIFT 1" : "OVERTIME";
+                    currentShiftMode = isWithinWindow ? "SHIFT 1" : "OVERTIME SHIFT 1";
                     break;
                 case "2":
                     isWithinWindow = now >= shift2Start && now < shift2End;
-                    currentShiftMode = isWithinWindow ? "SHIFT 2" : "OVERTIME";
+                    currentShiftMode = isWithinWindow ? "SHIFT 2" : "OVERTIME SHIFT 2";
                     break;
                 case "3":
                     isWithinWindow = (now >= shift3Start && now < shift3End) || (now >= shift3Start2 && now < shift3End2);
-                    currentShiftMode = isWithinWindow ? "SHIFT 3" : "OVERTIME";
+                    currentShiftMode = isWithinWindow ? "SHIFT 3" : "OVERTIME SHIFT 3";
                     break;
                 default:
                     // Tidak ada periode terpilih / nilai tidak dikenali -> catat sebagai OVERTIME
@@ -561,6 +561,227 @@ END;";
             }
         }
 
+        // ============================================================
+        // FITUR MISSING SERIAL - sama seperti CS, machine code MCH1-01
+        // ============================================================
+
+        // ─── GET MISSING SERIALS (dipanggil oleh showShiftEndModal -> fetchCuMissingSerials) ───
+        public async Task<IActionResult> OnGetMissingSerialsAsync(string machineCode, string startTime, string endTime)
+        {
+            try
+            {
+                if (!DateTime.TryParse(startTime, out DateTime start) || !DateTime.TryParse(endTime, out DateTime end))
+                {
+                    return new JsonResult(new { error = "Format waktu tidak valid" });
+                }
+
+                var missingResult = new List<string>();
+                string firstSerial = null;
+                string lastSerial = null;
+                int totalToday = 0;
+
+                using (SqlConnection connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+
+                    // Ambil semua serial dalam window waktu periode ini, diurutkan
+                    // berdasarkan WAKTU SCAN (SDate ASC) supaya bisa dapat serial
+                    // pertama & terakhir yang benar-benar discan di periode ini.
+                    string sql = @"
+                SELECT SN_GOOD
+                FROM OEESN
+                WHERE SDate >= @StartTime AND SDate < @EndTime
+                  AND MachineCode = @MachineCode
+                  AND SN_GOOD IS NOT NULL
+                ORDER BY SDate ASC";
+
+                    var chronological = new List<string>(); // urut waktu scan (utk serial pertama/terakhir)
+
+                    using (SqlCommand command = new SqlCommand(sql, connection))
+                    {
+                        command.Parameters.AddWithValue("@StartTime", start);
+                        command.Parameters.AddWithValue("@EndTime", end);
+                        command.Parameters.AddWithValue("@MachineCode", machineCode);
+
+                        using (SqlDataReader reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                if (!reader.IsDBNull(0))
+                                    chronological.Add(reader.GetString(0));
+                            }
+                        }
+                    }
+
+                    if (chronological.Count > 0)
+                    {
+                        firstSerial = chronological.First();
+                        lastSerial = chronological.Last();
+                        totalToday = chronological.Count;
+                    }
+
+                    var allSerials = chronological; // dipakai lagi utk perhitungan grouping missing serial
+
+                    if (allSerials.Count == 0)
+                    {
+                        return new JsonResult(new { serials = Array.Empty<string>(), firstSerial, lastSerial, totalToday });
+                    }
+
+                    // ── Group per prefix (5 karakter awal) biar nggak nyampur antar model ──
+                    var groups = allSerials
+                        .Where(s => s.Length >= 5)
+                        .GroupBy(s => s.Substring(0, 5));
+
+                    foreach (var group in groups)
+                    {
+                        var numericParts = new List<(long num, string original)>();
+
+                        foreach (var sn in group)
+                        {
+                            // Ambil bagian angka setelah prefix 5 karakter
+                            string suffix = sn.Length > 5 ? sn.Substring(5) : sn;
+                            if (long.TryParse(suffix, out long num))
+                            {
+                                numericParts.Add((num, sn));
+                            }
+                        }
+
+                        if (numericParts.Count == 0) continue;
+
+                        long min = numericParts.Min(x => x.num);
+                        long max = numericParts.Max(x => x.num);
+                        var existingSet = new HashSet<long>(numericParts.Select(x => x.num));
+                        string prefix = group.Key;
+
+                        for (long n = min; n <= max; n++)
+                        {
+                            if (!existingSet.Contains(n))
+                            {
+                                // Rekonstruksi format serial asli (padding sesuai panjang suffix asli)
+                                int suffixLen = numericParts[0].original.Length - prefix.Length;
+                                string paddedNum = n.ToString().PadLeft(suffixLen, '0');
+                                missingResult.Add(prefix + paddedNum);
+                            }
+                        }
+                    }
+                }
+
+                return new JsonResult(new { serials = missingResult, firstSerial, lastSerial, totalToday });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception OnGetMissingSerialsAsync (CU): " + ex.ToString());
+                return new JsonResult(new { error = ex.Message });
+            }
+        }
+
+        // ─── ADD MISSING SERIAL (dipanggil oleh addCuSerial di JS) ───
+        public class AddCuSerialRequest
+        {
+            public string MachineCode { get; set; }
+            public string SerialNumber { get; set; }
+            public string StartTime { get; set; }
+            public string EndTime { get; set; }
+        }
+
+        public async Task<IActionResult> OnPostAddSerialAsync([FromBody] AddCuSerialRequest req)
+        {
+            try
+            {
+                if (!DateTime.TryParse(req.StartTime, out DateTime start) || !DateTime.TryParse(req.EndTime, out DateTime end))
+                {
+                    return new JsonResult(new { success = false, error = "Format waktu tidak valid" });
+                }
+
+                using (SqlConnection connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+
+                    // Cek duplikat dulu
+                    string checkSql = "SELECT COUNT(*) FROM OEESN WHERE SN_GOOD = @SN_GOOD AND MachineCode = @MachineCode";
+                    using (SqlCommand checkCmd = new SqlCommand(checkSql, connection))
+                    {
+                        checkCmd.Parameters.AddWithValue("@SN_GOOD", req.SerialNumber);
+                        checkCmd.Parameters.AddWithValue("@MachineCode", req.MachineCode);
+                        int existing = (int)await checkCmd.ExecuteScalarAsync();
+                        if (existing > 0)
+                        {
+                            return new JsonResult(new { success = false, error = "Serial sudah ada di database" });
+                        }
+                    }
+
+                    // Ambil data referensi (Product_Id, ShiftMode, dll) dari row terdekat di window yang sama
+                    string refSql = @"
+                SELECT TOP 1 Product_Id, ShiftMode, TargetUnit, GoodUnit, NoOfOperator, CycleTime
+                FROM OEESN
+                WHERE SDate >= @StartTime AND SDate < @EndTime
+                  AND MachineCode = @MachineCode
+                ORDER BY SDate DESC";
+
+                    string productId = null;
+                    string shiftMode = "";
+                    decimal targetUnit = 0, goodUnit = 0;
+                    int noOfOperator = 0, cycleTime = 0;
+
+                    using (SqlCommand refCmd = new SqlCommand(refSql, connection))
+                    {
+                        refCmd.Parameters.AddWithValue("@StartTime", start);
+                        refCmd.Parameters.AddWithValue("@EndTime", end);
+                        refCmd.Parameters.AddWithValue("@MachineCode", req.MachineCode);
+
+                        using (SqlDataReader reader = await refCmd.ExecuteReaderAsync())
+                        {
+                            if (await reader.ReadAsync())
+                            {
+                                productId = reader.IsDBNull(0) ? null : reader.GetString(0);
+                                shiftMode = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                                targetUnit = reader.IsDBNull(2) ? 0 : reader.GetDecimal(2);
+                                goodUnit = reader.IsDBNull(3) ? 0 : reader.GetDecimal(3);
+                                noOfOperator = reader.IsDBNull(4) ? 0 : reader.GetInt32(4);
+                                cycleTime = reader.IsDBNull(5) ? 0 : reader.GetInt32(5);
+                            }
+                        }
+                    }
+
+                    if (productId == null)
+                    {
+                        return new JsonResult(new { success = false, error = "Tidak ada data referensi di periode ini untuk copy Product_Id" });
+                    }
+
+                    string insertSql = @"
+                INSERT INTO OEESN (Date, SDate, EndDate, ProductTime, TotalDownTime, TargetUnit, GoodUnit, EjectUnit, TotalUnit, OEE,
+                    Availability, Performance, Quality, CycleTime, MachineCode, Product_Id, NoOfOperator, P_Target, P_Actual, IdleTime, SN_GOOD, ShiftMode)
+                VALUES (@Date, @SDate, @EndDate, 0, 0, @TargetUnit, @GoodUnit, 0, @GoodUnit, 0,
+                    0, 0, 0, @CycleTime, @MachineCode, @Product_Id, @NoOfOperator, 0, 0, 0, @SN_GOOD, @ShiftMode)";
+
+                    using (SqlCommand insCmd = new SqlCommand(insertSql, connection))
+                    {
+                        DateTime insertTime = start; // taruh di dalam window periode
+                        insCmd.Parameters.AddWithValue("@Date", insertTime);
+                        insCmd.Parameters.AddWithValue("@SDate", insertTime);
+                        insCmd.Parameters.AddWithValue("@EndDate", insertTime);
+                        insCmd.Parameters.AddWithValue("@TargetUnit", targetUnit);
+                        insCmd.Parameters.AddWithValue("@GoodUnit", goodUnit);
+                        insCmd.Parameters.AddWithValue("@CycleTime", cycleTime);
+                        insCmd.Parameters.AddWithValue("@MachineCode", req.MachineCode);
+                        insCmd.Parameters.AddWithValue("@Product_Id", productId);
+                        insCmd.Parameters.AddWithValue("@NoOfOperator", noOfOperator);
+                        insCmd.Parameters.AddWithValue("@SN_GOOD", req.SerialNumber);
+                        insCmd.Parameters.AddWithValue("@ShiftMode", shiftMode);
+
+                        await insCmd.ExecuteNonQueryAsync();
+                    }
+                }
+
+                return new JsonResult(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception OnPostAddSerialAsync (CU): " + ex.ToString());
+                return new JsonResult(new { success = false, error = ex.Message });
+            }
+        }
+
         public int CountDataAddedToday(SqlConnection connection)
         {
             string countDataSql = "SELECT COUNT(*) FROM OEESN WHERE Date >= @Today AND MachineCode = @MachineCode";
@@ -580,78 +801,8 @@ END;";
                 return (int)countDataCommand.ExecuteScalar() + 1;
             }
         }
-        //public async Task<IActionResult> OnPostSaveLossTimeAsync()
-        //{
-        //    string reasonInput = Request.Form["LossTimeReason"];
-        //    if (string.IsNullOrEmpty(reasonInput))
-        //    {
-        //        ModelState.AddModelError("LossTimeReason", "Penyebab LossTime tidak boleh kosong!");
-        //        return Page(); // Kembali ke halaman dengan error
-        //    }
-
-        //    try
-        //    {
-        //        using (SqlConnection connection = new SqlConnection(_connectionString))
-        //        {
-        //            await connection.OpenAsync();
-
-        //            string getLastSDateSql = @"
-        //        SELECT TOP 1 SDate FROM OEESN 
-        //        WHERE MachineCode = @MachineCode 
-        //        ORDER BY SDate DESC";
-
-        //            using (SqlCommand command = new SqlCommand(getLastSDateSql, connection))
-        //            {
-        //                command.Parameters.AddWithValue("@MachineCode", "MCH1-01");
-
-        //                using (SqlDataReader reader = await command.ExecuteReaderAsync())
-        //                {
-        //                    if (reader.Read())
-        //                    {
-        //                        TStartLossVal = reader.GetDateTime(0);
-        //                    }
-        //                }
-        //            }
-        //        }
-
-        //        // Simpan reason loss
-        //        RlossVal = reasonInput;
-
-        //        // Kirim data ke View
-        //        TempData["Message"] = "LossTime disimpan, menunggu produk baru...";
-        //        TempData["ReasonLoss"] = RlossVal;
-        //        TempData["StartTime"] = TStartLossVal;
-
-        //        return RedirectToPage(); // Kembali ke halaman dengan ViewData
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return BadRequest("Terjadi kesalahan: " + ex.Message);
-        //    }
-        //}
-
-        // Buat method baru untuk dipanggil dari UI
-        //public async Task<IActionResult> OnPostSaveReasonAsync([FromBody] LossTimeRequest request)
-        //{
-        //    try
-        //    {
-        //        (DateTime? tStartLoss, string? discardedReason) = await _lossTimeService.GetLastSDateAndReasonAsync("MCH1-01"); // MachineCode untuk CU
-        //        if (tStartLoss.HasValue)
-        //        {
-        //            await _lossTimeService.SaveLossTimeAsync(request.LossTimeReason, "MCH1-01", tStartLoss.Value);
-        //            return new OkResult();
-        //        }
-        //        return new BadRequestObjectResult("Could not find start time for loss.");
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return new BadRequestObjectResult(ex.Message);
-        //    }
-        //}
 
         /// Kelas sederhana untuk menampung waktu mulai dan selesai istirahat.
-        /// 
-
         private List<RestPeriod> GetRestPeriods(DateTime forDate)
         {
             var periods = new List<RestPeriod>();

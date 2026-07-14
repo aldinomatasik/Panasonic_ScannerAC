@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model IndexModel
 @{
     DateTime nsStart = DateTime.Now.Date.AddHours(7);
@@ -6,11 +6,11 @@
     DateTime shift1Start = DateTime.Now.Date.AddHours(7);
     DateTime shift1End = DateTime.Now.Date.AddHours(15).AddMinutes(45);
     DateTime shift2Start = DateTime.Now.Date.AddHours(15).AddMinutes(45);
-    DateTime shift2End = DateTime.Now.Date.AddHours(23);
-    DateTime shift3Start = DateTime.Now.Date.AddHours(23);
+    DateTime shift2End = DateTime.Now.Date.AddHours(23).AddMinutes(15);
+    DateTime shift3Start = DateTime.Now.Date.AddHours(23).AddMinutes(15);
     DateTime shift3End = DateTime.Now.Date.AddDays(1).AddHours(7);
     DateTime shift3End2 = DateTime.Now.Date.AddHours(7);
-    DateTime shift3Start2 = DateTime.Now.Date.AddDays(-1).AddHours(23);
+    DateTime shift3Start2 = DateTime.Now.Date.AddDays(-1).AddHours(23).AddMinutes(15);
     int shift = 0;
     decimal idletime;
     var currentDate = DateTime.Now.Date;
@@ -215,22 +215,404 @@
 <!-- Modal Konfirmasi Akhir Periode - muncul saat periode berakhir -->
 <!-- atau saat tombol submit manual (overtime) dipencet             -->
 <!-- ============================================================ -->
+
+<style>
+    /* ── ShiftEnd Modal CU ──
+                   Tema terang (light), aksen biru #1565C0 / #0B5ED7
+                */
+    #ShiftEndModal .modal-dialog {
+        max-width: 760px;
+    }
+
+    #ShiftEndModal .modal-content {
+        background-color: #ffffff !important;
+        border: 1px solid rgba(21, 101, 192, 0.25) !important;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    }
+
+    #ShiftEndModal .modal-header {
+        background: #ffffff !important;
+        border-bottom: 1px solid rgba(21, 101, 192, 0.2) !important;
+        padding: 16px 22px;
+    }
+
+    #ShiftEndModal .modal-title {
+        color: #0f2a52 !important;
+        font-size: 20px;
+        font-weight: 700;
+    }
+
+        #ShiftEndModal .modal-title small {
+            opacity: 0.7;
+            font-weight: 400;
+            font-size: 15px;
+        }
+
+    #ShiftEndModal .btn-close {
+        filter: none;
+    }
+
+    /* ── Total Produksi Hari Ini (highlight besar di atas) ── */
+    #ShiftEndModal .se-total-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 20px 16px 14px;
+        background: #eef4ff;
+        border-bottom: 1px solid rgba(21, 101, 192, 0.15);
+    }
+
+    #ShiftEndModal .se-total-label {
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: #1565C0;
+    }
+
+    #ShiftEndModal .se-total-value {
+        font-size: 46px;
+        font-weight: 800;
+        color: #0f2a52;
+        font-family: monospace;
+        line-height: 1.2;
+    }
+
+    /* ── Info kecil: Mesin & Periode (dikecilkan, tidak terlalu penting) ── */
+    #ShiftEndModal .se-mini-info {
+        display: flex;
+        justify-content: center;
+        gap: 18px;
+        flex-wrap: wrap;
+        padding: 6px 16px;
+        font-size: 12px;
+        color: #6b7688;
+        background: #ffffff;
+    }
+
+        #ShiftEndModal .se-mini-info span strong {
+            color: #3c4561;
+            font-weight: 600;
+        }
+
+    /* Info bar — Model / Serial Pertama / Serial Terakhir */
+    #ShiftEndModal .ms-info-bar {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 14px 22px;
+        background: #f4f7fc;
+        border-bottom: 1px solid rgba(21, 101, 192, 0.15);
+    }
+
+    #ShiftEndModal .ms-info-chip {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 1;
+        min-width: 140px;
+    }
+
+        #ShiftEndModal .ms-info-chip .chip-label {
+            font-size: 12px;
+            color: #1565C0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 700;
+        }
+
+        #ShiftEndModal .ms-info-chip .chip-value {
+            font-size: 18px;
+            color: #0f2a52;
+            font-weight: 700;
+        }
+
+        #ShiftEndModal .ms-info-chip.chip-num .chip-value {
+            font-size: 24px;
+            font-weight: 800;
+            color: #1565C0;
+            font-family: monospace;
+            letter-spacing: -0.5px;
+        }
+
+    /* Table wrap */
+    #ShiftEndModal .ms-table-wrap {
+        max-height: 340px;
+        overflow-y: auto;
+    }
+
+        #ShiftEndModal .ms-table-wrap::-webkit-scrollbar {
+            width: 6px;
+            background: rgba(0,0,0,0.03);
+        }
+
+        #ShiftEndModal .ms-table-wrap::-webkit-scrollbar-thumb {
+            background: rgba(21,101,192,0.25);
+            border-radius: 3px;
+        }
+
+    /* Table */
+    #ShiftEndModal .ms-tbl {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin: 0;
+        font-size: 16px;
+    }
+
+        #ShiftEndModal .ms-tbl thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #ffffff !important;
+            color: #bcd6ff !important;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 10px 18px;
+            border-bottom: 1px solid rgba(21, 101, 192, 0.2) !important;
+        }
+
+        #ShiftEndModal .ms-tbl tbody td {
+            background-color: #ffffff !important;
+            color: #24304a !important;
+            border-color: rgba(0,0,0,0.06) !important;
+            padding: 12px 18px;
+            border-bottom: 1px solid rgba(0,0,0,0.06) !important;
+            vertical-align: middle;
+        }
+
+        #ShiftEndModal .ms-tbl tbody tr:nth-child(even) td {
+            background-color: #f4f7fc !important;
+        }
+
+        #ShiftEndModal .ms-tbl tbody td.td-label {
+            color: #6b7688 !important;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            font-weight: 700;
+            width: 160px;
+        }
+
+        #ShiftEndModal .ms-tbl tbody td.td-value {
+            font-weight: 700;
+            font-size: 17px;
+            color: #24304a !important;
+        }
+
+            #ShiftEndModal .ms-tbl tbody td.td-value.highlight {
+                color: #1565C0 !important;
+                font-size: 24px;
+                font-family: monospace;
+            }
+
+        #ShiftEndModal .ms-tbl tbody tr:hover td {
+            background-color: #e7f0ff !important;
+        }
+
+    /* ── Serial Hilang: label section ── */
+    #ShiftEndModal .se-section-label {
+        padding: 14px 22px 6px;
+        font-size: 14px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #1565C0;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    /* Serial hilang: kolom nomor + aksi */
+    #ShiftEndModal .ms-tbl tbody td.td-serial {
+        font-family: 'Courier New', monospace;
+        font-size: 16px;
+        color: #0f2a52 !important;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }
+
+    #ShiftEndModal .ms-tbl tbody td.td-action {
+        text-align: center;
+        width: 150px;
+    }
+
+    /* Loading / Empty state */
+    #ShiftEndModal .ms-loading {
+        text-align: center;
+        padding: 26px 16px;
+        color: #1565C0;
+        font-size: 15px;
+    }
+
+    #ShiftEndModal .ms-empty {
+        text-align: center;
+        padding: 26px 16px;
+        color: #8a94a6;
+        font-size: 15px;
+    }
+
+        #ShiftEndModal .ms-empty .ms-empty-icon {
+            font-size: 30px;
+            margin-bottom: 8px;
+            opacity: 0.6;
+            color: #2e7d32;
+        }
+
+    /* Tombol + Add — hijau */
+    #ShiftEndModal .btn-add-serial {
+        font-size: 13px;
+        font-weight: 700;
+        padding: 5px 16px;
+        border-radius: 999px;
+        background: #2e7d32;
+        border: 1px solid #2e7d32;
+        color: #ffffff !important;
+        transition: all 0.15s;
+        white-space: nowrap;
+    }
+
+        #ShiftEndModal .btn-add-serial:hover {
+            background: #256428;
+            border-color: #256428;
+            color: #ffffff !important;
+        }
+
+        #ShiftEndModal .btn-add-serial:disabled {
+            background: #cfd6e0;
+            border-color: #cfd6e0;
+            color: #ffffff !important;
+            cursor: not-allowed;
+        }
+
+    /* Badge "Added" — teks hitam, boleh wrap, nggak kepotong */
+    #ShiftEndModal .badge-added {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 8px;
+        background: #eeeeee;
+        border: 1px solid #cccccc;
+        color: #000000 !important;
+        white-space: normal;
+        line-height: 1.3;
+        letter-spacing: 0.3px;
+    }
+
+    /* Footer */
+    #ShiftEndModal .modal-footer {
+        border-top: 1px solid rgba(0,0,0,0.08) !important;
+        background: #f4f7fc !important;
+        padding: 14px 22px;
+        justify-content: space-between;
+    }
+
+    #ShiftEndModal .se-badge {
+        font-size: 14px;
+        background: #eef4ff;
+        border: 1px solid rgba(255, 255, 255, 1);
+        color: #1565C0;
+        border-radius: 999px;
+        padding: 4px 16px;
+        font-weight: 700;
+    }
+
+    #ShiftEndModal .btn-confirm-shift {
+        font-size: 15px;
+        font-weight: 700;
+        padding: 8px 24px;
+        border-radius: 999px;
+        background: #1565C0;
+        border: 2px solid #1565C0;
+        color: #ffffff;
+        transition: all 0.15s;
+        line-height: 1.5;
+    }
+
+        #ShiftEndModal .btn-confirm-shift:hover {
+            background: #0f4c92;
+            border-color: #0f4c92;
+            color: #fff;
+        }
+
+    /* ── Override: semua teks di ShiftEndModal jadi hitam ── */
+    #ShiftEndModal,
+    #ShiftEndModal * {
+        color: #000000 !important;
+    }
+</style>
+
 <div class="modal fade" id="ShiftEndModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="ShiftEndModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header" style="background-color:#180D2F; color:#FFAE11;">
-                <h5 class="modal-title" id="ShiftEndModalLabel">Konfirmasi Akhir Periode</h5>
+
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    Konfirmasi Akhir Periode
+                </h5>
             </div>
-            <div class="modal-body">
-                <p>Pastikan Total Produksi berikut sudah <strong>benar</strong> sebelum lanjut ke periode berikutnya:</p>
-                <div class="text-center mb-3">
-                    <div style="font-size:16px; color:#555;" id="shiftEndPeriodLabel">-</div>
-                    <span style="font-size:38px; font-weight:bold; color:#180D2F;" id="shiftEndTotalDisplay">0</span>
+
+            <!-- Info kecil: Mesin & Periode (tidak terlalu penting, dikecilkan) -->
+            <div class="se-mini-info" id="se-info-bar">
+                <span>Mesin: <strong>CU Assembly</strong></span>
+                <span>Periode: <strong id="shiftEndPeriodLabel">—</strong></span>
+                <span>Tanggal: <strong id="shiftEndDateLabel">—</strong></span>
+            </div>
+
+            <!-- Total Produksi Hari Ini (highlight besar) -->
+            <div class="se-total-section">
+                <span class="se-total-label">Total Produksi Hari Ini</span>
+                <span class="se-total-value" id="seTotalToday">0</span>
+            </div>
+
+            <!-- Model / Serial Pertama / Serial Terakhir -->
+            <div class="ms-info-bar">
+                <div class="ms-info-chip">
+                    <span class="chip-label">Model</span>
+                    <span class="chip-value" id="seModelValue">—</span>
                 </div>
-                <div class="d-flex w-100 justify-content-end">
-                    <button type="button" id="confirmShiftEndBtn" class="btn btn-primary">Submit &amp; Pilih Periode Baru</button>
+                <div class="ms-info-chip chip-num">
+                    <span class="chip-label">Serial Pertama</span>
+                    <span class="chip-value" id="seFirstSerial">—</span>
+                </div>
+                <div class="ms-info-chip chip-num">
+                    <span class="chip-label">Serial Terakhir</span>
+                    <span class="chip-value" id="seLastSerial">—</span>
                 </div>
             </div>
+
+            <!-- ── Serial Hilang — hanya tampil kalau memang ada yang hilang ── -->
+            <div id="se-missing-section" style="display:none;">
+                <div class="se-section-label">Serial Hilang</div>
+                <div class="ms-table-wrap" style="max-height:260px;">
+                    <div id="cu-ms-loading" class="ms-loading" style="display:none;">
+                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                        Memuat missing serial...
+                    </div>
+                    <table class="ms-tbl" id="cu-ms-table" style="display:none;">
+                        <thead>
+                            <tr>
+                                <th>Missing Serial</th>
+                                <th style="text-align:center;width:110px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cu-ms-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <span class="se-badge" id="cu-ms-count-badge" style="display:none;">0 serial hilang</span>
+                <button type="button" id="confirmShiftEndBtn" class="btn-confirm-shift">
+                    Submit &amp; Pilih Periode Baru
+                </button>
+            </div>
+
         </div>
     </div>
 </div>
@@ -372,6 +754,12 @@ else
         var intVal = 0;
         var intervalId;
 
+        // ── State missing-serial untuk ShiftEndModal ────────────
+        let _cuMachineCode = '';
+        let _cuStartTime = '';
+        let _cuEndTime = '';
+        let _cuMissingList = [];
+
         // ===================== SHIFT/PERIODE (popup based) =====================
         var shiftLabels = { "NS": "Non-Shift", "1": "Shift 1", "2": "Shift 2", "3": "Shift 3" };
 
@@ -391,13 +779,13 @@ else
             }
             if (shiftCode === "2") {
                 var s = new Date(d); s.setHours(15, 45, 0, 0);
-                var e = new Date(d); e.setHours(23, 0, 0, 0);
+                var e = new Date(d); e.setHours(23, 15, 0, 0);
                 return { start: s.getTime(), end: e.getTime() };
             }
             if (shiftCode === "3") {
-                var s1 = new Date(d); s1.setHours(23, 0, 0, 0);
+                var s1 = new Date(d); s1.setHours(23, 15, 0, 0);
                 var e1 = new Date(d); e1.setDate(e1.getDate() + 1); e1.setHours(7, 0, 0, 0);
-                var s2 = new Date(d); s2.setDate(s2.getDate() - 1); s2.setHours(23, 0, 0, 0);
+                var s2 = new Date(d); s2.setDate(s2.getDate() - 1); s2.setHours(23, 15, 0, 0);
                 var e2 = new Date(d); e2.setHours(7, 0, 0, 0);
                 var nowT = now.getTime();
                 if (nowT >= s1.getTime()) {
@@ -447,12 +835,197 @@ else
         }
 
         function showShiftEndModal() {
-            var valuecs = document.getElementById("countervaluecs");
-            var labelcs = document.getElementById("counterlabelcs");
-            document.getElementById("shiftEndTotalDisplay").textContent = valuecs.textContent;
-            document.getElementById("shiftEndPeriodLabel").textContent = labelcs.textContent.replace(/:\s*$/, "");
+            // Baca nilai dari halaman
+            var totalUnit  = (document.getElementById("countervaluecs")?.textContent  || '0').trim();
+            var periodText = (document.getElementById("counterlabelcs")?.textContent || '').replace(/:\s*$/, '').trim();
+            var currentSN  = (document.getElementById("currentRecordValue")?.textContent || '').trim();
+            // Ambil model dari tampilan header CU
+            var modelText  = '';
+            var modelEl    = document.querySelector("div.col-sm-9 span");
+            if (modelEl) modelText = modelEl.textContent.trim();
+
+            // Info kecil (mesin, periode, tanggal)
+            document.getElementById("shiftEndPeriodLabel").textContent = periodText || '\u2014';
+            document.getElementById("shiftEndDateLabel").textContent = new Date().toLocaleDateString('id-ID', {day:'2-digit',month:'long',year:'numeric'});
+
+            // Total Produksi Hari Ini (highlight besar)
+            document.getElementById("seTotalToday").textContent = totalUnit;
+
+            // Model / Serial Pertama / Serial Terakhir
+            document.getElementById("seModelValue").textContent = modelText || '\u2014';
+            document.getElementById("seFirstSerial").textContent = '\u2014';
+            document.getElementById("seLastSerial").textContent = currentSN || '\u2014';
+
+            // Isi badge footer (disembunyikan dulu, ditampilkan lagi kalau memang ada yang hilang)
+            document.getElementById("cu-ms-count-badge").style.display = "none";
+            document.getElementById("se-missing-section").style.display = "none";
+
+            // ── Cek serial hilang untuk periode yang sedang berjalan ──
+            var selectedShift = localStorage.getItem("selectedShiftCU");
+            var win = selectedShift ? getShiftWindow(selectedShift) : null;
+
+            if (win) {
+                _cuMachineCode = "MCH1-01";
+                _cuStartTime   = new Date(win.start).toISOString();
+                _cuEndTime     = new Date(win.end).toISOString();
+                setCuMsState('loading');
+                document.getElementById("se-missing-section").style.display = "";
+                fetchCuMissingSerials();
+            }
+
             var endModal = new bootstrap.Modal(document.getElementById("ShiftEndModal"));
             endModal.show();
+        }
+
+        function setCuMsState(state) {
+            document.getElementById('cu-ms-loading').style.display = state === 'loading' ? '' : 'none';
+            document.getElementById('cu-ms-table').style.display   = state === 'table'   ? '' : 'none';
+            // Kalau tidak ada missing serial ('empty'), seluruh section disembunyikan
+            document.getElementById('se-missing-section').style.display = state === 'empty' ? 'none' : '';
+        }
+
+        // ── Fetch missing serial untuk periode ini ──
+        async function fetchCuMissingSerials() {
+            try {
+                const params = new URLSearchParams({
+                    machineCode: _cuMachineCode,
+                    startTime:   _cuStartTime,
+                    endTime:     _cuEndTime
+                });
+
+                const res  = await fetch(`?handler=MissingSerials&${params}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    setCuMsState('empty');
+                    document.getElementById('cu-ms-count-badge').style.display = "none";
+                    return;
+                }
+
+                // Isi Serial Pertama & Serial Terakhir kalau backend mengirimkannya
+                if (data.firstSerial) document.getElementById("seFirstSerial").textContent = data.firstSerial;
+                if (data.lastSerial) document.getElementById("seLastSerial").textContent = data.lastSerial;
+                if (data.totalToday) document.getElementById("seTotalToday").textContent = data.totalToday;
+                if (data.model) document.getElementById("seModelValue").textContent = data.model;
+
+                _cuMissingList = data.serials || [];
+                renderCuMissingTable(_cuMissingList);
+
+            } catch (err) {
+                setCuMsState('empty');
+                document.getElementById('cu-ms-count-badge').style.display = "none";
+            }
+        }
+
+        function renderCuMissingTable(serials) {
+            const tbody = document.getElementById('cu-ms-tbody');
+            const badge = document.getElementById('cu-ms-count-badge');
+
+            tbody.innerHTML = '';
+
+            const remaining = serials.filter(s => s !== null);
+
+            if (remaining.length === 0) {
+                setCuMsState('empty');
+                badge.style.display = "none";
+                return;
+            }
+
+            setCuMsState('table');
+            badge.style.display = "";
+            badge.textContent = `${remaining.length} serial hilang`;
+
+            serials.forEach((sn, idx) => {
+                if (sn === null) return; // sudah di-add, skip
+
+                const tr = document.createElement('tr');
+                tr.dataset.idx = idx;
+                tr.innerHTML = `
+                    <td class="td-serial">${sn}</td>
+                    <td class="td-action">
+                        <button type="button" class="btn-add-serial"
+                                onclick="addCuSerial(this, ${idx}, '${sn}')">
+                            + Add
+                        </button>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ── Add serial hilang — langsung proses, tanpa popup konfirmasi ──
+        async function addCuSerial(btn, idx, serialNumber) {
+            btn.disabled = true;
+            btn.textContent = '...';
+
+            try {
+                const res = await fetch('?handler=AddSerial', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': getAntiForgeryToken()
+                    },
+                    body: JSON.stringify({
+                        machineCode:  _cuMachineCode,
+                        serialNumber: String(serialNumber),
+                        startTime:    _cuStartTime,
+                        endTime:      _cuEndTime
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    const td = btn.closest('td');
+                    td.innerHTML = `<span class="badge-added">✓ Ditambahkan</span>`;
+
+                    setTimeout(() => {
+                        const row = td.closest('tr');
+                        row.style.transition = 'opacity 0.3s, transform 0.3s';
+                        row.style.opacity = '0';
+                        row.style.transform = 'translateX(8px)';
+                        setTimeout(() => {
+                            _cuMissingList[idx] = null;
+                            row.remove();
+
+                            const remaining = _cuMissingList.filter(s => s !== null).length;
+                            const badge = document.getElementById('cu-ms-count-badge');
+                            if (remaining === 0) {
+                                setCuMsState('empty');
+                                badge.style.display = "none";
+                            } else {
+                                badge.textContent = `${remaining} serial hilang`;
+                            }
+                        }, 300);
+                    }, 800);
+
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '+ Add';
+                    const td = btn.closest('td');
+                    const errSpan = document.createElement('div');
+                    errSpan.style.cssText = 'color:#c62828; font-size:12px; margin-top:4px;';
+                    errSpan.textContent = data.error || 'Gagal menambahkan';
+                    td.appendChild(errSpan);
+                    setTimeout(() => errSpan.remove(), 3000);
+                }
+
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = '+ Add';
+                const td = btn.closest('td');
+                const errSpan = document.createElement('div');
+                errSpan.style.cssText = 'color:#c62828; font-size:12px; margin-top:4px;';
+                errSpan.textContent = 'Gagal menghubungi server';
+                td.appendChild(errSpan);
+                setTimeout(() => errSpan.remove(), 3000);
+            }
+        }
+
+        // ── Anti-forgery token helper ──
+        function getAntiForgeryToken() {
+            return document.querySelector('input[name="__RequestVerificationToken"]')?.value
+                ?? document.cookie.split(';').find(c => c.trim().startsWith('XSRF-TOKEN='))?.split('=')[1]
+                ?? '';
         }
 
         function checkShiftBoundary() {
