@@ -310,9 +310,14 @@ END;";
                             {
                                 iniUser.Product_Id = dataReader.GetString(0);
                                 iniUser.MachineCode = dataReader.GetString(1);
+                                if (!dataReader.IsDBNull(2))
+                                {
+                                    SUT = dataReader.GetInt32(2);
+                                }
                             }
                         }
-                        Console.WriteLine($"[DEBUG] Product_Id hasil query: '{iniUser.Product_Id}'");
+
+                        Console.WriteLine($"[DEBUG] Product_Id hasil query: '{iniUser.Product_Id}', SUT: {SUT}");
                     }
 
                     // Jika SUT tidak ada di query pertama, ambil secara terpisah
