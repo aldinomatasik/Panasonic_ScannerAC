@@ -6,7 +6,7 @@ using System.IO.Ports;
 using LossTimeComponent.Services;
 using static iniReal.Pages.CS.IndexModel;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration;
+using System.Text.RegularExpressions;
 
 namespace iniReal.Pages.CU
 {
@@ -389,7 +389,7 @@ END;";
 
                         if (netDowntimeSeconds > thresholdSeconds)
                         {
-                            DateTime tentativeLossStart = SkipRestTime(previousProductTime.AddSeconds(cycleTime));
+                            DateTime tentativeLossStart = SkipRestTime(previousProductTime);
                             DateTime lossEndTime = currentProductTime;
                             double pureLossSeconds = netDowntimeSeconds - cycleTime;
 
@@ -471,10 +471,10 @@ END;";
                         await insertUserQrCommand.ExecuteNonQueryAsync();
                     }
 
-                    string checkserialnum2 = @"SELECT TOP 2 SN_GOOD FROM OEESN WHERE SN_GOOD LIKE LEFT(@SN_GOOD, 5)+'%' AND MachineCode = @MachineCode ORDER BY SDate DESC;";
+                    string checkserialnum2 = @"SELECT TOP 2 SN_GOOD FROM OEESN WHERE Product_Id = @Product_Id AND MachineCode = @MachineCode ORDER BY SDate DESC;";
                     using (SqlCommand command = new SqlCommand(checkserialnum2, connection))
                     {
-                        command.Parameters.AddWithValue("@sn_good", iniUser.SN_GOOD);
+                        command.Parameters.AddWithValue("@Product_Id", iniUser.Product_Id);
                         command.Parameters.AddWithValue("@MachineCode", MachineCode);
                         using (SqlDataReader reader = command.ExecuteReader())
                         {
@@ -485,33 +485,11 @@ END;";
                             }
                             if (serialnumbers.Count == 2)
                             {
-                                string currentsn;
-                                string previoussn;
+                                string currentsn = Regex.Match(serialnumbers[0], @"\d+$").Value;
+                                string previoussn = Regex.Match(serialnumbers[1], @"\d+$").Value;
 
-                                if (serialnumbers[0].Length >= 21 && serialnumbers[1].Length >= 21)
+                                if (!string.IsNullOrEmpty(currentsn) && !string.IsNullOrEmpty(previoussn))
                                 {
-                                    // Mengambil 6 digit terakhir untuk cek urutan
-                                    currentsn = serialnumbers[0].Substring(serialnumbers[0].Length - 6);
-                                    previoussn = serialnumbers[1].Substring(serialnumbers[1].Length - 6);
-                                    if (!IsSnSequential(currentsn, previoussn))
-                                    {
-                                        TempData["errormessage"] = "Serial Number tidak Berurutan";
-                                    }
-                                }
-                                // Fallback logic lama
-                                else if (serialnumbers[0].Substring(0, 1).Equals('F') && serialnumbers[1].Substring(0, 1).Equals('F') || serialnumbers[0].Substring(0, 1).Equals('f') && serialnumbers[1].Substring(0, 1).Equals('f'))
-                                {
-                                    currentsn = serialnumbers[0].Substring(1);
-                                    previoussn = serialnumbers[1].Substring(1);
-                                    if (!IsSnSequential(currentsn, previoussn))
-                                    {
-                                        TempData["errormessage"] = "Serial Number tidak Berurutan";
-                                    }
-                                }
-                                else
-                                {
-                                    currentsn = serialnumbers[0];
-                                    previoussn = serialnumbers[1];
                                     if (!IsSnSequential(currentsn, previoussn))
                                     {
                                         TempData["errormessage"] = "Serial Number tidak Berurutan";
@@ -521,10 +499,10 @@ END;";
                         }
                     }
 
-                    string dataWaktuSNTerbaru = @"SELECT TOP 2 SDate FROM OEESN WHERE SN_GOOD LIKE LEFT(@SN_GOOD, 5)+'%' AND MachineCode = @MachineCode ORDER BY SDate DESC;";
+                    string dataWaktuSNTerbaru = @"SELECT TOP 2 SDate FROM OEESN WHERE Product_Id = @Product_Id AND MachineCode = @MachineCode ORDER BY SDate DESC;";
                     using (SqlCommand commandWaktuSNTerbaru = new SqlCommand(dataWaktuSNTerbaru, connection))
                     {
-                        commandWaktuSNTerbaru.Parameters.AddWithValue("@SN_GOOD", iniUser.SN_GOOD);
+                        commandWaktuSNTerbaru.Parameters.AddWithValue("@Product_Id", iniUser.Product_Id);
                         commandWaktuSNTerbaru.Parameters.AddWithValue("@MachineCode", MachineCode);
 
                         using (SqlDataReader reader = commandWaktuSNTerbaru.ExecuteReader())

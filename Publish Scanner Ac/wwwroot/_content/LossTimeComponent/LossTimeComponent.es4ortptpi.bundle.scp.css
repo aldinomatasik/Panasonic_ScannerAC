@@ -1,0 +1,43 @@
+/* _content/LossTimeComponent/LossTimeDashboard.razor.rz.scp.css */
+/* Styling dasar untuk kartu losstime */
+.losstime-card[b-oamupwlw30] {
+    margin-bottom: 10px;
+    border-radius: 8px;
+}
+
+.header-row[b-oamupwlw30] {
+    font-weight: bold;
+    background-color: #f8f9fa; /* Warna latar belakang abu-abu muda untuk header */
+    border-bottom: 2px solid #dee2e6;
+}
+
+/* --- Media Query untuk Tablet dan Ponsel (layar lebih kecil dari 992px) --- */
+@media (max-width: 991.98px) {
+    .losstime-card .row[b-oamupwlw30] {
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+        .losstime-card .row [class*="col-"][b-oamupwlw30] {
+            width: 100%; /* Setiap item data mengambil satu baris penuh */
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee; /* Garis pemisah antar data */
+            margin-bottom: 10px;
+        }
+
+            .losstime-card .row [class*="col-"]:last-child[b-oamupwlw30] {
+                border-bottom: none; /* Hapus garis pemisah untuk item terakhir */
+            }
+
+    /* Membuat label untuk setiap data di layar kecil */
+    .losstime-card [data-label][b-oamupwlw30]::before {
+        content: attr(data-label) ": ";
+        display: block;
+        font-weight: bold;
+        color: #6c757d; /* Abu-abu */
+    }
+
+    .action-col[b-oamupwlw30] {
+        margin-top: 10px;
+    }
+}

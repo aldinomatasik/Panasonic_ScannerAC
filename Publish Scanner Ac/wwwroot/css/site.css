@@ -1,0 +1,161 @@
+﻿html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+}
+
+.wrapper {
+    display: flex;
+    min-height: 100vh;
+}
+
+#sidebar {
+    width: 250px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    z-index: 999;
+    background: #180D2F;
+    color: #fff;
+}
+
+#content {
+    flex-grow: 1;
+    margin-left: 240px;
+    padding: 20px;
+}
+.slider-switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+}
+
+.slider-switch input {
+        display: none;
+}
+
+.slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    border-radius: 34px;
+    cursor: pointer;
+}
+
+.slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        border-radius: 50%;
+        transition: 0.4s;
+}
+
+input:checked + .slider {
+    background-color: #87bbfa;
+}
+
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+/* Rounded sliders */
+.slider.round {
+    border-radius: 34px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+.modal-container {
+    background-color: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 100vw;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3 ease;
+    z-index: 9999;
+}
+
+    .modal-container.show {
+        pointer-events: auto;
+        opacity: 1;
+    }
+
+.mod {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    background-color: white;
+    border-radius: 5px;
+    padding: 30px 50px;
+    width: 600px;
+    max-height: 100%;
+    max-width: 100%;
+    text-align: center;
+}
+
+
+.modal-containercu {
+    background-color: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 100vw;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3 ease;
+    z-index: 9999;
+}
+
+    .modal-containercu.show {
+        pointer-events: auto;
+        opacity: 1;
+    }
+
+.modcu {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    background-color: white;
+    border-radius: 5px;
+    padding: 30px 50px;
+    width: 600px;
+    max-height: 100%;
+    max-width: 100%;
+    text-align: center;
+}
+
+.reason-buttons .btn {
+    font-size: 15px;
+    padding: 12px 16px;
+    min-height: 52px;
+}
