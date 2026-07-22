@@ -165,6 +165,13 @@ namespace iniReal.Pages.CS
             string prodPlanInput = Request.Form["PP"];
             string idleInput = Request.Form["IT"];
             string shiftModeInput = Request.Form["ShiftMode"];
+            string isHolidayInput = Request.Form["IsHoliday"];
+
+            bool isHoliday = string.Equals(
+                isHolidayInput,
+                "true",
+                StringComparison.OrdinalIgnoreCase);
+
             string currentShiftMode;
 
             // ==== PENENTUAN SHIFT / OVERTIME ====
@@ -191,19 +198,19 @@ namespace iniReal.Pages.CS
             switch (shiftModeInput)
             {
                 case "NS":
-                    isWithinWindow = now >= nsStart && now < nsEnd;
+                    isWithinWindow = (now >= nsStart && now < nsEnd) && !isHoliday;
                     currentShiftMode = isWithinWindow ? "NON-SHIFT" : "OVERTIME";
                     break;
                 case "1":
-                    isWithinWindow = now >= shift1Start && now < shift1End;
+                    isWithinWindow = (now >= shift1Start && now < shift1End) && !isHoliday;
                     currentShiftMode = isWithinWindow ? "SHIFT 1" : "OVERTIME SHIFT 1";
                     break;
                 case "2":
-                    isWithinWindow = now >= shift2Start && now < shift2End;
+                    isWithinWindow = (now >= shift2Start && now < shift2End) && !isHoliday;
                     currentShiftMode = isWithinWindow ? "SHIFT 2" : "OVERTIME SHIFT 2";
                     break;
                 case "3":
-                    isWithinWindow = (now >= shift3Start && now < shift3End) || (now >= shift3Start2 && now < shift3End2);
+                    isWithinWindow = ((now >= shift3Start && now < shift3End) || (now >= shift3Start2 && now < shift3End2)) && !isHoliday;
                     currentShiftMode = isWithinWindow ? "SHIFT 3" : "OVERTIME SHIFT 3";
                     break;
                 default:
@@ -539,7 +546,6 @@ END;";
                     return new JsonResult(new { error = "Format waktu tidak valid" });
                 }
 
-                var missingResult = new List<string>();
                 string firstSerial = null;
                 string lastSerial = null;
                 int totalToday = 0;
@@ -548,18 +554,19 @@ END;";
                 {
                     await connection.OpenAsync();
 
-                    // Ambil semua serial dalam window waktu periode ini, diurutkan
-                    // berdasarkan WAKTU SCAN (SDate ASC) supaya bisa dapat serial
-                    // pertama & terakhir yang benar-benar discan di periode ini.
+                    // Ambil semua serial + Product_Id dalam window waktu periode ini,
+                    // diurutkan berdasarkan WAKTU SCAN (SDate ASC) supaya bisa dapat
+                    // serial pertama & terakhir yang benar-benar discan di periode ini.
                     string sql = @"
-                SELECT SN_GOOD
+                SELECT SN_GOOD, Product_Id
                 FROM OEESN
                 WHERE SDate >= @StartTime AND SDate < @EndTime
                   AND MachineCode = @MachineCode
                   AND SN_GOOD IS NOT NULL
                 ORDER BY SDate ASC";
 
-                    var chronological = new List<string>(); // urut waktu scan (utk serial pertama/terakhir)
+                    // Masing-masing item: (SN_GOOD, Product_Id)
+                    var chronological = new List<(string sn, string productId)>();
 
                     using (SqlCommand command = new SqlCommand(sql, connection))
                     {
@@ -572,42 +579,89 @@ END;";
                             while (await reader.ReadAsync())
                             {
                                 if (!reader.IsDBNull(0))
-                                    chronological.Add(reader.GetString(0));
+                                {
+                                    string sn = reader.GetString(0);
+                                    string pid = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                                    chronological.Add((sn, pid));
+                                }
                             }
                         }
                     }
 
                     if (chronological.Count > 0)
                     {
-                        firstSerial = chronological.First();
-                        lastSerial = chronological.Last();
+                        firstSerial = chronological.First().sn;
+                        lastSerial = chronological.Last().sn;
                         totalToday = chronological.Count;
                     }
 
-                    var allSerials = chronological; // dipakai lagi utk perhitungan grouping missing serial
-
-                    if (allSerials.Count == 0)
+                    if (chronological.Count == 0)
                     {
-                        return new JsonResult(new { serials = Array.Empty<string>(), firstSerial, lastSerial, totalToday });
+                        return new JsonResult(new
+                        {
+                            serials = Array.Empty<object>(),
+                            models = Array.Empty<object>(),
+                            firstSerial,
+                            lastSerial,
+                            totalToday
+                        });
+                    }
+
+                    // ── Ambil ProductName dari Masterdata untuk mapping productId -> productName ──
+                    var productNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    var distinctProductIds = chronological
+                        .Select(x => x.productId)
+                        .Where(p => !string.IsNullOrEmpty(p))
+                        .Distinct()
+                        .ToList();
+
+                    if (distinctProductIds.Count > 0)
+                    {
+                        // Bangun IN clause secara manual (aman karena hanya product_id dari DB sendiri)
+                        string inParams = string.Join(",", distinctProductIds.Select((_, i) => $"@pid{i}"));
+                        string productSql = $"SELECT Product_Id, ProductName FROM Masterdata WHERE Product_Id IN ({inParams})";
+                        using (SqlCommand prodCmd = new SqlCommand(productSql, connection))
+                        {
+                            for (int i = 0; i < distinctProductIds.Count; i++)
+                                prodCmd.Parameters.AddWithValue($"@pid{i}", distinctProductIds[i]);
+
+                            using (SqlDataReader pReader = await prodCmd.ExecuteReaderAsync())
+                            {
+                                while (await pReader.ReadAsync())
+                                {
+                                    string pid = pReader.IsDBNull(0) ? "" : pReader.GetString(0);
+                                    string pname = pReader.IsDBNull(1) ? pid : pReader.GetString(1);
+                                    if (!string.IsNullOrEmpty(pid))
+                                        productNames[pid] = pname;
+                                }
+                            }
+                        }
                     }
 
                     // ── Group per prefix (5 karakter awal) biar nggak nyampur antar model ──
-                    // Ini nyontoh pola LEFT(SN_GOOD,5) yang udah dipakai di OnPostAsync kamu.
-                    var groups = allSerials
-                        .Where(s => s.Length >= 5)
-                        .GroupBy(s => s.Substring(0, 5));
+                    // Grup diambil dari semua SN yang ada di chronological.
+                    // Kita juga perlu tahu productId per prefix agar bisa dikembalikan ke frontend.
+                    var groups = chronological
+                        .Where(x => x.sn.Length >= 5)
+                        .GroupBy(x => x.sn.Substring(0, 5));
+
+                    // missingSerialItems: list of { serial, productId }
+                    var missingSerialItems = new List<object>();
+
+                    // Untuk setiap prefix group, kumpulkan info per model
+                    // groupModels: productId -> { firstSerial, lastSerial, missingList }
+                    var groupModels = new Dictionary<string, (string firstSn, string lastSn, List<string> missing)>(StringComparer.OrdinalIgnoreCase);
 
                     foreach (var group in groups)
                     {
-                        var numericParts = new List<(long num, string original)>();
+                        var numericParts = new List<(long num, string original, string productId)>();
 
-                        foreach (var sn in group)
+                        foreach (var item in group)
                         {
-                            // Ambil bagian angka setelah prefix 5 karakter
-                            string suffix = sn.Length > 5 ? sn.Substring(5) : sn;
+                            string suffix = item.sn.Length > 5 ? item.sn.Substring(5) : item.sn;
                             if (long.TryParse(suffix, out long num))
                             {
-                                numericParts.Add((num, sn));
+                                numericParts.Add((num, item.sn, item.productId));
                             }
                         }
 
@@ -618,20 +672,70 @@ END;";
                         var existingSet = new HashSet<long>(numericParts.Select(x => x.num));
                         string prefix = group.Key;
 
+                        // Tentukan productId dominan untuk prefix ini (ambil yang paling banyak)
+                        string dominantProductId = numericParts
+                            .GroupBy(x => x.productId)
+                            .OrderByDescending(g => g.Count())
+                            .First().Key;
+
+                        // Serial pertama & terakhir per model (dari data yang ADA, bukan yang missing)
+                        string modelFirstSn = numericParts.OrderBy(x => x.num).First().original;
+                        string modelLastSn = numericParts.OrderByDescending(x => x.num).First().original;
+
+                        var missingForGroup = new List<string>();
+
                         for (long n = min; n <= max; n++)
                         {
                             if (!existingSet.Contains(n))
                             {
-                                // Rekonstruksi format serial asli (padding sesuai panjang suffix asli)
                                 int suffixLen = numericParts[0].original.Length - prefix.Length;
                                 string paddedNum = n.ToString().PadLeft(suffixLen, '0');
-                                missingResult.Add(prefix + paddedNum);
+                                string missingSn = prefix + paddedNum;
+                                missingForGroup.Add(missingSn);
+                                missingSerialItems.Add(new { serial = missingSn, productId = dominantProductId });
                             }
                         }
-                    }
-                }
 
-                return new JsonResult(new { serials = missingResult, firstSerial, lastSerial, totalToday });
+                        // Gabungkan ke groupModels per productId
+                        if (!groupModels.ContainsKey(dominantProductId))
+                        {
+                            groupModels[dominantProductId] = (modelFirstSn, modelLastSn, missingForGroup);
+                        }
+                        else
+                        {
+                            var existing = groupModels[dominantProductId];
+                            existing.missing.AddRange(missingForGroup);
+                            // Update first/last jika lebih luar
+                            if (string.Compare(modelFirstSn, existing.firstSn) < 0)
+                                existing = (modelFirstSn, existing.lastSn, existing.missing);
+                            if (string.Compare(modelLastSn, existing.lastSn) > 0)
+                                existing = (existing.firstSn, modelLastSn, existing.missing);
+                            groupModels[dominantProductId] = existing;
+                        }
+                    }
+
+                    // Bangun array models untuk dropdown
+                    var modelsResult = groupModels
+                        .Where(kv => kv.Value.missing.Count > 0)
+                        .Select(kv => new
+                        {
+                            productId = kv.Key,
+                            productName = productNames.TryGetValue(kv.Key, out string pn) ? pn : kv.Key,
+                            missingCount = kv.Value.missing.Count,
+                            firstSerial = kv.Value.firstSn,
+                            lastSerial = kv.Value.lastSn
+                        })
+                        .ToList();
+
+                    return new JsonResult(new
+                    {
+                        serials = missingSerialItems,
+                        models = modelsResult,
+                        firstSerial,
+                        lastSerial,
+                        totalToday
+                    });
+                }
             }
             catch (Exception ex)
             {

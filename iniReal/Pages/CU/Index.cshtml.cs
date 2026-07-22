@@ -184,14 +184,19 @@ namespace iniReal.Pages.CU
             string prodPlanInput = Request.Form["PP"];
             string idleInput = Request.Form["IT"];
             string shiftModeInput = Request.Form["ShiftMode"];
+            string isHolidayInput = Request.Form["IsHoliday"]; // ← BARU: dikirim dari popup Hari Kerja/Hari Libur
             string currentShiftMode;
 
             // ==== PENENTUAN SHIFT / OVERTIME ====
             // shiftModeInput yang dikirim FE sekarang berupa kode periode yang dipilih user
             // lewat popup: "NS", "1", "2", "3". Backend adalah sumber kebenaran:
             // jika jam saat ini TIDAK berada dalam window periode yang dipilih,
+            // ATAU kalau user menandai hari ini sebagai Hari Libur,
             // otomatis dicatat sebagai OVERTIME.
             DateTime now = DateTime.Now;
+
+            // ← BARU: flag hari libur, dikirim manual dari popup FE ("true"/"false")
+            bool isHoliday = string.Equals(isHolidayInput, "true", StringComparison.OrdinalIgnoreCase);
 
             DateTime nsStart = now.Date.AddHours(7);
             DateTime nsEnd = now.Date.AddHours(16);
@@ -210,19 +215,19 @@ namespace iniReal.Pages.CU
             switch (shiftModeInput)
             {
                 case "NS":
-                    isWithinWindow = now >= nsStart && now < nsEnd;
+                    isWithinWindow = (now >= nsStart && now < nsEnd) && !isHoliday;
                     currentShiftMode = isWithinWindow ? "NON-SHIFT" : "OVERTIME";
                     break;
                 case "1":
-                    isWithinWindow = now >= shift1Start && now < shift1End;
+                    isWithinWindow = (now >= shift1Start && now < shift1End) && !isHoliday;
                     currentShiftMode = isWithinWindow ? "SHIFT 1" : "OVERTIME SHIFT 1";
                     break;
                 case "2":
-                    isWithinWindow = now >= shift2Start && now < shift2End;
+                    isWithinWindow = (now >= shift2Start && now < shift2End) && !isHoliday;
                     currentShiftMode = isWithinWindow ? "SHIFT 2" : "OVERTIME SHIFT 2";
                     break;
                 case "3":
-                    isWithinWindow = (now >= shift3Start && now < shift3End) || (now >= shift3Start2 && now < shift3End2);
+                    isWithinWindow = ((now >= shift3Start && now < shift3End) || (now >= shift3Start2 && now < shift3End2)) && !isHoliday;
                     currentShiftMode = isWithinWindow ? "SHIFT 3" : "OVERTIME SHIFT 3";
                     break;
                 default:
@@ -545,8 +550,68 @@ END;";
         }
 
         // ============================================================
-        // FITUR MISSING SERIAL - sama seperti CS, machine code MCH1-01
+        // FITUR MISSING SERIAL
+        // - Grouping berbasis Product_Id resmi dari Masterdata (bukan
+        //   Substring(0,5) serial mentah) supaya model dengan prefix
+        //   5-karakter yang sama (mis. 4216000 vs 4216001 vs 4216002)
+        //   tidak tercampur.
+        // - Trailing-digit generic parsing: ambil digit run di ujung
+        //   SETIAP serial (bukan cuma suffix setelah Product_Id), jadi
+        //   format campur huruf (mis. "4216001D1242890052779") tetap
+        //   terbaca, tidak hilang begitu saja dari perhitungan.
+        // - Gap-based detection: cuma cek gap ANTAR PASANGAN serial yang
+        //   bersebelahan (bukan fill seluruh range min..max). Gap kecil
+        //   (<= GAP_THRESHOLD) dianggap beneran hilang; gap gede (ganti
+        //   lot/model/counter reset) di-skip, bukan dipaksa isi (yang
+        //   bisa bikin server hang karena loop jutaan iterasi).
+        // - Serial Pertama/Terakhir per-model: setiap entri di dropdown
+        //   model juga membawa firstSerial/lastSerial miliknya SENDIRI
+        //   (hasil scan pertama & terakhir untuk model itu di periode
+        //   ini), supaya saat user filter ke model tertentu di FE,
+        //   Serial Pertama/Terakhir bisa ikut berganti ke punya model
+        //   itu (bukan punya keseluruhan periode).
         // ============================================================
+
+        private const long MISSING_SERIAL_GAP_THRESHOLD = 50;
+
+        // ─── Ambil daftar Product_Id resmi dari Masterdata, urut dari yang PALING PANJANG ───
+        // Urutan panjang penting supaya prefix yang lebih spesifik (mis. "4216000")
+        // dicoba/match duluan sebelum prefix yang lebih pendek/umum (mis. "421").
+        private async Task<List<(string ProductId, string ProductName)>> GetMasterProductsAsync(SqlConnection connection, string machineCode)
+        {
+            var list = new List<(string, string)>();
+            string sql = "SELECT Product_Id, ProductName FROM Masterdata WHERE MachineCode = @MachineCode";
+            using (SqlCommand cmd = new SqlCommand(sql, connection))
+            {
+                cmd.Parameters.AddWithValue("@MachineCode", machineCode);
+                using (SqlDataReader reader = await cmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        if (!reader.IsDBNull(0))
+                        {
+                            string pid = reader.GetString(0);
+                            string pname = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                            list.Add((pid, pname));
+                        }
+                    }
+                }
+            }
+            return list.OrderByDescending(p => p.Item1.Length).ToList();
+        }
+
+        // ─── Cocokkan satu serial number ke Product_Id resmi (bukan tebak 5 karakter) ───
+        private (string ProductId, string ProductName) MatchProduct(string sn, List<(string ProductId, string ProductName)> masterProducts)
+        {
+            foreach (var p in masterProducts)
+            {
+                if (sn.StartsWith(p.ProductId, StringComparison.OrdinalIgnoreCase))
+                    return p;
+            }
+            // Fallback kalau memang tidak ada Product_Id yang match sama sekali
+            string fallbackPrefix = sn.Length >= 5 ? sn.Substring(0, 5).ToUpper() : sn.ToUpper();
+            return (fallbackPrefix, "Model Tidak Dikenal");
+        }
 
         // ─── GET MISSING SERIALS (dipanggil oleh showShiftEndModal -> fetchCuMissingSerials) ───
         public async Task<IActionResult> OnGetMissingSerialsAsync(string machineCode, string startTime, string endTime)
@@ -558,16 +623,24 @@ END;";
                     return new JsonResult(new { error = "Format waktu tidak valid" });
                 }
 
-                var missingResult = new List<string>();
                 string firstSerial = null;
                 string lastSerial = null;
                 int totalToday = 0;
+
+                // hasil akhir: list of { serial, productId, productName }
+                var missingResult = new List<object>();
+                // ringkasan model yang muncul di periode ini, buat isi dropdown FE
+                // (plus firstSerial/lastSerial MILIK MODEL ITU SENDIRI di periode ini)
+                var modelSummary = new Dictionary<string, (string ProductName, int MissingCount, string FirstSerial, string LastSerial)>();
 
                 using (SqlConnection connection = new SqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
 
-                    // Ambil semua serial dalam window waktu periode ini, diurutkan
+                    // 1. Ambil daftar Product_Id resmi untuk mesin ini dari Masterdata
+                    var masterProducts = await GetMasterProductsAsync(connection, machineCode);
+
+                    // 2. Ambil semua serial dalam window waktu periode ini, diurutkan
                     // berdasarkan WAKTU SCAN (SDate ASC) supaya bisa dapat serial
                     // pertama & terakhir yang benar-benar discan di periode ini.
                     string sql = @"
@@ -603,53 +676,115 @@ END;";
                         totalToday = chronological.Count;
                     }
 
-                    var allSerials = chronological; // dipakai lagi utk perhitungan grouping missing serial
-
-                    if (allSerials.Count == 0)
+                    if (chronological.Count == 0)
                     {
-                        return new JsonResult(new { serials = Array.Empty<string>(), firstSerial, lastSerial, totalToday });
+                        return new JsonResult(new { serials = Array.Empty<object>(), models = Array.Empty<object>(), firstSerial, lastSerial, totalToday });
                     }
 
-                    // ── Group per prefix (5 karakter awal) biar nggak nyampur antar model ──
-                    var groups = allSerials
-                        .Where(s => s.Length >= 5)
-                        .GroupBy(s => s.Substring(0, 5));
+                    // ── Grouping berdasarkan Product_Id hasil MATCH ke Masterdata ──
+                    var groups = chronological
+                        .Select(sn => new { Serial = sn, Match = MatchProduct(sn, masterProducts) })
+                        .GroupBy(x => x.Match.ProductId);
 
                     foreach (var group in groups)
                     {
-                        var numericParts = new List<(long num, string original)>();
+                        string productId = group.Key;
+                        string productName = group.First().Match.ProductName;
 
-                        foreach (var sn in group)
+                        // Serial pertama & terakhir milik MODEL INI SENDIRI di periode ini
+                        // (group sudah otomatis urut sesuai waktu scan, karena "chronological"
+                        // dibaca ORDER BY SDate ASC dan GroupBy menjaga urutan sumbernya).
+                        string groupFirstSerial = group.First().Serial;
+                        string groupLastSerial = group.Last().Serial;
+
+                        // ── Ambil trailing digits dari SETIAP serial (generik, bukan cuma
+                        //    dari suffix setelah Product_Id). nonDigitPart = semua karakter
+                        //    sebelum digit run terakhir (bisa cuma productId, atau
+                        //    productId + huruf, mis. "4216001D") ──
+                        var parsed = new List<(string nonDigitPart, long trailingNum, int digitLen, string original)>();
+
+                        foreach (var item in group)
                         {
-                            // Ambil bagian angka setelah prefix 5 karakter
-                            string suffix = sn.Length > 5 ? sn.Substring(5) : sn;
-                            if (long.TryParse(suffix, out long num))
+                            string sn = item.Serial;
+                            var m = Regex.Match(sn, @"\d+$"); // digit run di paling ujung
+                            if (!m.Success) continue;
+
+                            string nonDigitPart = sn.Substring(0, sn.Length - m.Length);
+                            if (long.TryParse(m.Value, out long num))
                             {
-                                numericParts.Add((num, sn));
+                                parsed.Add((nonDigitPart, num, m.Length, sn));
                             }
                         }
 
-                        if (numericParts.Count == 0) continue;
+                        if (parsed.Count < 2) continue; // butuh minimal 2 titik buat ada "gap"
 
-                        long min = numericParts.Min(x => x.num);
-                        long max = numericParts.Max(x => x.num);
-                        var existingSet = new HashSet<long>(numericParts.Select(x => x.num));
-                        string prefix = group.Key;
+                        // ── Sub-grouping berdasarkan nonDigitPart, biar "4216001" dan
+                        //    "4216001D" tetap dianggap dua deret nomor yang beda ──
+                        var subGroups = parsed.GroupBy(x => x.nonDigitPart);
 
-                        for (long n = min; n <= max; n++)
+                        foreach (var sub in subGroups)
                         {
-                            if (!existingSet.Contains(n))
+                            var sorted = sub.OrderBy(x => x.trailingNum).ToList();
+                            if (sorted.Count < 2) continue;
+
+                            string nonDigitPart = sub.Key;
+                            int missingInGroup = 0;
+
+                            for (int i = 0; i < sorted.Count - 1; i++)
                             {
-                                // Rekonstruksi format serial asli (padding sesuai panjang suffix asli)
-                                int suffixLen = numericParts[0].original.Length - prefix.Length;
-                                string paddedNum = n.ToString().PadLeft(suffixLen, '0');
-                                missingResult.Add(prefix + paddedNum);
+                                long current = sorted[i].trailingNum;
+                                long next = sorted[i + 1].trailingNum;
+                                long gap = next - current;
+
+                                if (gap <= 1) continue; // berurutan, tidak ada yang hilang
+
+                                if (gap > MISSING_SERIAL_GAP_THRESHOLD)
+                                {
+                                    // Lompatan gede = kemungkinan besar ganti lot/model/counter reset,
+                                    // BUKAN serial hilang. Skip, jangan dipaksa isi (jaga performa juga).
+                                    continue;
+                                }
+
+                                int digitLen = sorted[i].digitLen;
+                                for (long n = current + 1; n < next; n++)
+                                {
+                                    string paddedNum = n.ToString().PadLeft(digitLen, '0');
+                                    string missingSn = nonDigitPart + paddedNum;
+
+                                    missingResult.Add(new { serial = missingSn, productId, productName });
+                                    missingInGroup++;
+                                }
+                            }
+
+                            if (missingInGroup > 0)
+                            {
+                                if (modelSummary.ContainsKey(productId))
+                                {
+                                    var existing = modelSummary[productId];
+                                    modelSummary[productId] = (productName, existing.MissingCount + missingInGroup, groupFirstSerial, groupLastSerial);
+                                }
+                                else
+                                {
+                                    modelSummary[productId] = (productName, missingInGroup, groupFirstSerial, groupLastSerial);
+                                }
                             }
                         }
                     }
                 }
 
-                return new JsonResult(new { serials = missingResult, firstSerial, lastSerial, totalToday });
+                var modelsForDropdown = modelSummary
+                    .Select(kv => new
+                    {
+                        productId = kv.Key,
+                        productName = kv.Value.ProductName,
+                        missingCount = kv.Value.MissingCount,
+                        firstSerial = kv.Value.FirstSerial,
+                        lastSerial = kv.Value.LastSerial
+                    })
+                    .OrderByDescending(m => m.missingCount)
+                    .ToList();
+
+                return new JsonResult(new { serials = missingResult, models = modelsForDropdown, firstSerial, lastSerial, totalToday });
             }
             catch (Exception ex)
             {
@@ -663,6 +798,7 @@ END;";
         {
             public string MachineCode { get; set; }
             public string SerialNumber { get; set; }
+            public string ProductId { get; set; }   // dikirim dari FE, hasil match yang sudah pasti benar
             public string StartTime { get; set; }
             public string EndTime { get; set; }
         }
@@ -693,18 +829,19 @@ END;";
                         }
                     }
 
-                    // Ambil data referensi (Product_Id, ShiftMode, dll) dari row terdekat di window yang sama
+                    // productId diutamakan dari hasil matching FE (req.ProductId) yang sudah akurat.
+                    // Data referensi lain (ShiftMode, TargetUnit, dll) tetap diambil dari row terdekat di window yang sama.
+                    string productId = !string.IsNullOrEmpty(req.ProductId) ? req.ProductId : null;
+                    string shiftMode = "";
+                    decimal targetUnit = 0, goodUnit = 0;
+                    int noOfOperator = 0, cycleTime = 0;
+
                     string refSql = @"
                 SELECT TOP 1 Product_Id, ShiftMode, TargetUnit, GoodUnit, NoOfOperator, CycleTime
                 FROM OEESN
                 WHERE SDate >= @StartTime AND SDate < @EndTime
                   AND MachineCode = @MachineCode
                 ORDER BY SDate DESC";
-
-                    string productId = null;
-                    string shiftMode = "";
-                    decimal targetUnit = 0, goodUnit = 0;
-                    int noOfOperator = 0, cycleTime = 0;
 
                     using (SqlCommand refCmd = new SqlCommand(refSql, connection))
                     {
@@ -716,7 +853,8 @@ END;";
                         {
                             if (await reader.ReadAsync())
                             {
-                                productId = reader.IsDBNull(0) ? null : reader.GetString(0);
+                                if (productId == null)
+                                    productId = reader.IsDBNull(0) ? null : reader.GetString(0);
                                 shiftMode = reader.IsDBNull(1) ? "" : reader.GetString(1);
                                 targetUnit = reader.IsDBNull(2) ? 0 : reader.GetDecimal(2);
                                 goodUnit = reader.IsDBNull(3) ? 0 : reader.GetDecimal(3);

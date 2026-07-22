@@ -137,6 +137,7 @@
     <div class="col-md-3" style="width:49%">
         <form method="post" id="myForm">
             <input type="hidden" id="shiftModeInput" name="ShiftMode" value="" />
+            <input type="hidden" id="isHolidayInput" name="IsHoliday" value="false" />
             <div class="row mt-2 mb-2" style="font-size: 28px; font-weight:500">
                 <label class="col-sm-3 col-form-label" style="width:300px">Scan Serial Number :</label>
                 <div class="col-sm-3 align-self-center">
@@ -212,14 +213,43 @@
 </div>
 
 <!-- ============================================================ -->
+<!-- Modal Pilih Hari Kerja / Hari Libur - muncul SETELAH shift dipilih -->
+<!-- Jika "Hari Libur" dipilih, backend otomatis catat sebagai Overtime -->
+<!-- apapun shift yang dipilih sebelumnya.                          -->
+<!-- ============================================================ -->
+<div class="modal fade" id="HolidaySelectModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="HolidaySelectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color:#180D2F; color:#FFAE11;">
+                <h5 class="modal-title" id="HolidaySelectModalLabel">Status Hari Ini</h5>
+            </div>
+            <div class="modal-body">
+                <p class="text-center mb-3" style="font-size:16px;">Apakah hari ini Hari Kerja atau Hari Libur?</p>
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-success holiday-select-btn" data-holiday="false" style="font-size:18px; padding:12px;">
+                        Hari Kerja
+                    </button>
+                    <button type="button" class="btn btn-outline-danger holiday-select-btn" data-holiday="true" style="font-size:18px; padding:12px;">
+                        Hari Libur
+                    </button>
+                </div>
+                <p class="text-center text-muted mt-3 mb-0" style="font-size:13px;">
+                    Kalau Anda pilih <strong>Hari Libur</strong>, semua data yang discan hari ini otomatis dicatat sebagai <strong>Overtime</strong>, apapun shift-nya.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
 <!-- Modal Konfirmasi Akhir Periode - muncul saat periode berakhir -->
 <!-- atau saat tombol submit manual (overtime) dipencet             -->
 <!-- ============================================================ -->
 
 <style>
     /* ── ShiftEnd Modal CU ──
-                   Tema terang (light), aksen biru #1565C0 / #0B5ED7
-                */
+                           Tema terang (light), aksen biru #1565C0 / #0B5ED7
+                        */
     #ShiftEndModal .modal-dialog {
         max-width: 760px;
     }
@@ -247,7 +277,7 @@
         #ShiftEndModal .modal-title small {
             opacity: 0.7;
             font-weight: 400;
-            font-size: 15px;
+            font-size: 19px;
         }
 
     #ShiftEndModal .btn-close {
@@ -267,7 +297,7 @@
     }
 
     #ShiftEndModal .se-total-label {
-        font-size: 15px;
+        font-size: 19px;
         font-weight: 700;
         letter-spacing: 0.4px;
         text-transform: uppercase;
@@ -314,7 +344,7 @@
         flex-direction: column;
         gap: 2px;
         flex: 1;
-        min-width: 140px;
+        min-width: 0; /* penting: izinkan chip menyusut agar serial panjang tidak meluber ke chip sebelah */
     }
 
         #ShiftEndModal .ms-info-chip .chip-label {
@@ -329,14 +359,23 @@
             font-size: 18px;
             color: #0f2a52;
             font-weight: 700;
+            word-break: break-word;
+            overflow-wrap: anywhere;
         }
 
+        /* Serial Pertama / Serial Terakhir: serial bisa sangat panjang (21-23 karakter),
+               jadi font dikecilkan dan teks diizinkan patah baris supaya tidak overflow
+               keluar kotak / numpuk dengan chip sebelahnya. */
         #ShiftEndModal .ms-info-chip.chip-num .chip-value {
-            font-size: 24px;
+            font-size: 19px;
             font-weight: 800;
             color: #1565C0;
             font-family: monospace;
-            letter-spacing: -0.5px;
+            letter-spacing: 0;
+            line-height: 1.35;
+            word-break: break-all;
+            overflow-wrap: anywhere;
+            white-space: normal;
         }
 
     /* Table wrap */
@@ -369,7 +408,7 @@
             top: 0;
             z-index: 2;
             background: #ffffff !important;
-            color: #bcd6ff !important;
+            color: #000000 !important;
             font-size: 13px;
             font-weight: 700;
             text-transform: uppercase;
@@ -540,6 +579,13 @@
             color: #fff;
         }
 
+    /* ── Dropdown filter model di modal Serial Hilang ── */
+    #ShiftEndModal #cu-ms-model-filter {
+        border: 1px solid rgba(21, 101, 192, 0.35);
+        color: #0f2a52 !important;
+        background-color: #ffffff !important;
+    }
+
     /* ── Override: semua teks di ShiftEndModal jadi hitam ── */
     #ShiftEndModal,
     #ShiftEndModal * {
@@ -571,6 +617,10 @@
             </div>
 
             <!-- Model / Serial Pertama / Serial Terakhir -->
+            <!-- NOTE: Serial Pertama/Terakhir defaultnya untuk SELURUH PERIODE (Semua Model).
+                 Begitu user memilih model tertentu di dropdown "Serial Hilang" di bawah,
+                 kedua nilai ini otomatis berganti jadi punya model tersebut saja
+                 (lihat updateSerialFirstLastDisplay() di script). -->
             <div class="ms-info-bar">
                 <div class="ms-info-chip">
                     <span class="chip-label">Model</span>
@@ -588,7 +638,15 @@
 
             <!-- ── Serial Hilang — hanya tampil kalau memang ada yang hilang ── -->
             <div id="se-missing-section" style="display:none;">
-                <div class="se-section-label">Serial Hilang</div>
+                <div class="se-section-label">Serial Hilang(Model)</div>
+
+                <!-- ── Dropdown filter model — muncul karena satu periode bisa punya lebih dari 1 model ── -->
+                <div style="padding: 0 22px 10px;">
+                    <select id="cu-ms-model-filter" class="form-select form-select-sm" style="font-size:14px; max-width:340px;">
+                        <option value="__ALL__">Semua Model</option>
+                    </select>
+                </div>
+
                 <div class="ms-table-wrap" style="max-height:260px;">
                     <div id="cu-ms-loading" class="ms-loading" style="display:none;">
                         <div class="spinner-border spinner-border-sm me-2" role="status"></div>
@@ -597,6 +655,7 @@
                     <table class="ms-tbl" id="cu-ms-table" style="display:none;">
                         <thead>
                             <tr>
+                                <th>Model</th>
                                 <th>Missing Serial</th>
                                 <th style="text-align:center;width:110px;">Action</th>
                             </tr>
@@ -758,7 +817,16 @@ else
         let _cuMachineCode = '';
         let _cuStartTime = '';
         let _cuEndTime = '';
-        let _cuMissingList = [];
+        let _cuMissingList = [];       // array of {serial, productId, productName} | null (null = sudah di-add)
+        let _cuModelFilter = '__ALL__';
+
+        // Serial Pertama / Serial Terakhir untuk SELURUH PERIODE (dipakai lagi kalau
+        // user memilih balik ke "Semua Model" di dropdown filter Serial Hilang).
+        let _cuOverallFirstSerial = '';
+        let _cuOverallLastSerial = '';
+
+        // ── State pending: shift yang baru dipilih tapi menunggu jawaban Hari Kerja/Libur ──
+        let _pendingShiftCode = null;
 
         // ===================== SHIFT/PERIODE (popup based) =====================
         var shiftLabels = { "NS": "Non-Shift", "1": "Shift 1", "2": "Shift 2", "3": "Shift 3" };
@@ -796,7 +864,18 @@ else
             return { start: 0, end: 0 };
         }
 
+        // ── isWithinShiftWindow sekarang ikut mempertimbangkan status Hari Libur ──
+        // Kalau hari ini ditandai Hari Libur oleh user, selalu dianggap DI LUAR window
+        // (jadi otomatis Overtime), apapun jam & shift-nya.
+        function isTodayMarkedHoliday() {
+            var savedHoliday = localStorage.getItem("isHolidayCU");
+            var savedHolidayDate = localStorage.getItem("isHolidayDateCU");
+            var today = new Date().toDateString();
+            return savedHoliday === "true" && savedHolidayDate === today;
+        }
+
         function isWithinShiftWindow(shiftCode) {
+            if (isTodayMarkedHoliday()) return false;
             var win = getShiftWindow(shiftCode);
             var now = new Date().getTime();
             return now >= win.start && now < win.end;
@@ -807,11 +886,13 @@ else
             localStorage.setItem("selectedShiftDateCU", new Date().toDateString());
 
             var hiddenInputElement = document.getElementById("shiftModeInput");
+            var holidayInputElement = document.getElementById("isHolidayInput");
             var labelcs = document.getElementById("counterlabelcs");
             var valuecs = document.getElementById("countervaluecs");
             var periodLabel = document.getElementById("currentPeriodLabel");
 
             hiddenInputElement.value = shiftCode;
+            holidayInputElement.value = isTodayMarkedHoliday() ? "true" : "false";
 
             if (isWithinShiftWindow(shiftCode)) {
                 if (shiftCode === "NS") {
@@ -822,6 +903,10 @@ else
                     valuecs.textContent = "@recordCountCurrentShift";
                 }
                 periodLabel.textContent = "Periode : " + shiftLabels[shiftCode];
+            } else if (isTodayMarkedHoliday()) {
+                labelcs.textContent = "Overtime (Hari Libur) - Total Product : ";
+                valuecs.textContent = "@latestTotalUnit";
+                periodLabel.textContent = "Periode : Overtime - Hari Libur (dipilih: " + shiftLabels[shiftCode] + ")";
             } else {
                 labelcs.textContent = "Overtime - Total Product : ";
                 valuecs.textContent = "@latestTotalUnit";
@@ -831,6 +916,11 @@ else
 
         function showShiftSelectModal() {
             var modal = new bootstrap.Modal(document.getElementById("ShiftSelectModal"));
+            modal.show();
+        }
+
+        function showHolidaySelectModal() {
+            var modal = new bootstrap.Modal(document.getElementById("HolidaySelectModal"));
             modal.show();
         }
 
@@ -851,7 +941,7 @@ else
             // Total Produksi Hari Ini (highlight besar)
             document.getElementById("seTotalToday").textContent = totalUnit;
 
-            // Model / Serial Pertama / Serial Terakhir
+            // Model / Serial Pertama / Serial Terakhir (placeholder awal sebelum data periode di-fetch)
             document.getElementById("seModelValue").textContent = modelText || '\u2014';
             document.getElementById("seFirstSerial").textContent = '\u2014';
             document.getElementById("seLastSerial").textContent = currentSN || '\u2014';
@@ -859,6 +949,9 @@ else
             // Isi badge footer (disembunyikan dulu, ditampilkan lagi kalau memang ada yang hilang)
             document.getElementById("cu-ms-count-badge").style.display = "none";
             document.getElementById("se-missing-section").style.display = "none";
+            _cuModelFilter = '__ALL__';
+            _cuOverallFirstSerial = '';
+            _cuOverallLastSerial = '';
 
             // ── Cek serial hilang untuk periode yang sedang berjalan ──
             var selectedShift = localStorage.getItem("selectedShiftCU");
@@ -902,14 +995,20 @@ else
                     return;
                 }
 
-                // Isi Serial Pertama & Serial Terakhir kalau backend mengirimkannya
-                if (data.firstSerial) document.getElementById("seFirstSerial").textContent = data.firstSerial;
-                if (data.lastSerial) document.getElementById("seLastSerial").textContent = data.lastSerial;
+                // Simpan Serial Pertama & Serial Terakhir untuk SELURUH PERIODE (mode "Semua Model").
+                // Ini dipakai lagi oleh updateSerialFirstLastDisplay() saat dropdown di-reset ke "Semua Model".
+                _cuOverallFirstSerial = data.firstSerial || '';
+                _cuOverallLastSerial = data.lastSerial || '';
                 if (data.totalToday) document.getElementById("seTotalToday").textContent = data.totalToday;
-                if (data.model) document.getElementById("seModelValue").textContent = data.model;
 
+                // serials sekarang array of object: {serial, productId, productName}
                 _cuMissingList = data.serials || [];
-                renderCuMissingTable(_cuMissingList);
+
+                populateModelFilter(data.models || []);
+                renderCuMissingTable(_cuMissingList, _cuModelFilter);
+
+                // Tampilkan Serial Pertama/Terakhir sesuai filter yang aktif (default "Semua Model")
+                updateSerialFirstLastDisplay();
 
             } catch (err) {
                 setCuMsState('empty');
@@ -917,34 +1016,89 @@ else
             }
         }
 
-        function renderCuMissingTable(serials) {
+        // ── Isi dropdown model dari daftar model yang backend kirim (yang benar-benar punya missing serial) ──
+        // Setiap <option> juga membawa data-first-serial / data-last-serial milik model itu sendiri,
+        // supaya bisa dipakai langsung saat user pilih model tanpa perlu fetch ulang.
+        function populateModelFilter(models) {
+            const select = document.getElementById('cu-ms-model-filter');
+            select.innerHTML = `<option value="__ALL__">Semua Model</option>`;
+
+            models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.productId;
+                opt.textContent = `${m.productName || m.productId} (${m.productId}) — ${m.missingCount} hilang`;
+                opt.dataset.firstSerial = m.firstSerial || '';
+                opt.dataset.lastSerial = m.lastSerial || '';
+                select.appendChild(opt);
+            });
+
+            // reset listener biar nggak numpuk kalau modal dibuka berkali-kali
+            select.onchange = function () {
+                _cuModelFilter = this.value;
+                renderCuMissingTable(_cuMissingList, _cuModelFilter);
+                updateSerialFirstLastDisplay();
+            };
+        }
+
+        // ── Update tampilan "Serial Pertama" / "Serial Terakhir" sesuai model yang difilter ──
+        // - "Semua Model" (default)  -> pakai serial pertama/terakhir untuk SELURUH periode.
+        // - Model tertentu dipilih   -> berganti ke serial pertama/terakhir hasil scan
+        //                               model itu SENDIRI di periode ini.
+        function updateSerialFirstLastDisplay() {
+            const seFirst = document.getElementById("seFirstSerial");
+            const seLast  = document.getElementById("seLastSerial");
+
+            if (!_cuModelFilter || _cuModelFilter === '__ALL__') {
+                seFirst.textContent = _cuOverallFirstSerial || '\u2014';
+                seLast.textContent  = _cuOverallLastSerial  || '\u2014';
+                return;
+            }
+
+            const select = document.getElementById('cu-ms-model-filter');
+            const opt = Array.from(select.options).find(o => o.value === _cuModelFilter);
+
+            seFirst.textContent = (opt && opt.dataset.firstSerial) || '\u2014';
+            seLast.textContent  = (opt && opt.dataset.lastSerial)  || '\u2014';
+        }
+
+        // ── Render tabel missing serial, dengan filter model opsional ──
+        function renderCuMissingTable(serials, filterProductId) {
             const tbody = document.getElementById('cu-ms-tbody');
             const badge = document.getElementById('cu-ms-count-badge');
 
             tbody.innerHTML = '';
 
-            const remaining = serials.filter(s => s !== null);
+            const totalRemaining = serials.filter(s => s !== null).length;
 
-            if (remaining.length === 0) {
+            if (totalRemaining === 0) {
                 setCuMsState('empty');
                 badge.style.display = "none";
                 return;
             }
 
+            const filtered = serials.filter(s => {
+                if (s === null) return false;
+                if (!filterProductId || filterProductId === "__ALL__") return true;
+                return s.productId === filterProductId;
+            });
+
             setCuMsState('table');
             badge.style.display = "";
-            badge.textContent = `${remaining.length} serial hilang`;
+            badge.textContent = (!filterProductId || filterProductId === "__ALL__")
+                ? `${totalRemaining} serial hilang`
+                : `${filtered.length} serial hilang (filter aktif dari total ${totalRemaining})`;
 
-            serials.forEach((sn, idx) => {
-                if (sn === null) return; // sudah di-add, skip
+            filtered.forEach((item) => {
+                const idx = serials.indexOf(item); // idx asli di array utama, dipakai buat addCuSerial
 
                 const tr = document.createElement('tr');
                 tr.dataset.idx = idx;
                 tr.innerHTML = `
-                    <td class="td-serial">${sn}</td>
+                    <td class="td-label" style="width:auto;">${item.productName || item.productId}</td>
+                    <td class="td-serial">${item.serial}</td>
                     <td class="td-action">
                         <button type="button" class="btn-add-serial"
-                                onclick="addCuSerial(this, ${idx}, '${sn}')">
+                                onclick="addCuSerial(this, ${idx}, '${item.serial}', '${item.productId}')">
                             + Add
                         </button>
                     </td>`;
@@ -952,8 +1106,8 @@ else
             });
         }
 
-        // ── Add serial hilang — langsung proses, tanpa popup konfirmasi ──
-        async function addCuSerial(btn, idx, serialNumber) {
+        // ── Add serial hilang — langsung proses, tanpa popup konfirmasi. Sekarang ikut kirim productId. ──
+        async function addCuSerial(btn, idx, serialNumber, productId) {
             btn.disabled = true;
             btn.textContent = '...';
 
@@ -967,6 +1121,7 @@ else
                     body: JSON.stringify({
                         machineCode:  _cuMachineCode,
                         serialNumber: String(serialNumber),
+                        productId:    productId,
                         startTime:    _cuStartTime,
                         endTime:      _cuEndTime
                     })
@@ -993,7 +1148,7 @@ else
                                 setCuMsState('empty');
                                 badge.style.display = "none";
                             } else {
-                                badge.textContent = `${remaining} serial hilang`;
+                                renderCuMissingTable(_cuMissingList, _cuModelFilter);
                             }
                         }, 300);
                     }, 800);
@@ -1127,7 +1282,7 @@ else
 
                 const timeDiffSeconds = Math.floor((now - startOfShift) / 1000);
 
-                const sutVal = @getSUT(currentRecord.Product_Id);
+                const sutVal = @(currentRecord != null ? getSUT(currentRecord.Product_Id) : 0);
                 if (sutVal > 0) {
                     intVal = Math.floor(timeDiffSeconds / sutVal);
 
@@ -1156,13 +1311,39 @@ else
             }
 
             // ===== Inisialisasi popup pilih shift saat page dibuka =====
+            // Klik tombol shift -> simpan shift terpilih ke pending, lalu munculkan
+            // popup Hari Kerja/Hari Libur (BUKAN langsung apply/close).
             document.querySelectorAll(".shift-select-btn").forEach(function (btn) {
                 btn.addEventListener("click", function () {
                     var shiftCode = this.getAttribute("data-shift");
-                    applyShiftSelection(shiftCode);
-                    var modalEl = document.getElementById("ShiftSelectModal");
-                    var modalInstance = bootstrap.Modal.getInstance(modalEl);
-                    if (modalInstance) modalInstance.hide();
+                    _pendingShiftCode = shiftCode;
+
+                    var shiftModalEl = document.getElementById("ShiftSelectModal");
+                    var shiftModalInstance = bootstrap.Modal.getInstance(shiftModalEl);
+                    if (shiftModalInstance) shiftModalInstance.hide();
+
+                    showHolidaySelectModal();
+                });
+            });
+
+            // ===== Jawaban popup Hari Kerja / Hari Libur =====
+            // Setelah dijawab, baru finalisasi: simpan status hari, lalu apply shift terpilih.
+            document.querySelectorAll(".holiday-select-btn").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    var isHolidayValue = this.getAttribute("data-holiday"); // "true" | "false"
+
+                    localStorage.setItem("isHolidayCU", isHolidayValue);
+                    localStorage.setItem("isHolidayDateCU", new Date().toDateString());
+
+                    var holidayModalEl = document.getElementById("HolidaySelectModal");
+                    var holidayModalInstance = bootstrap.Modal.getInstance(holidayModalEl);
+                    if (holidayModalInstance) holidayModalInstance.hide();
+
+                    if (_pendingShiftCode) {
+                        applyShiftSelection(_pendingShiftCode);
+                        _pendingShiftCode = null;
+                    }
+
                     var serialInput = document.getElementById("serialNum");
                     if (serialInput) serialInput.focus();
                 });
@@ -1174,6 +1355,8 @@ else
                 if (endModal) endModal.hide();
                 localStorage.removeItem("selectedShiftCU");
                 localStorage.removeItem("selectedShiftDateCU");
+                localStorage.removeItem("isHolidayCU");
+                localStorage.removeItem("isHolidayDateCU");
                 showShiftSelectModal();
             });
 
@@ -1183,11 +1366,19 @@ else
 
             var savedShift = localStorage.getItem("selectedShiftCU");
             var savedDate = localStorage.getItem("selectedShiftDateCU");
+            var savedHolidayDate = localStorage.getItem("isHolidayDateCU");
             var today = new Date().toDateString();
 
-            if (savedShift && savedDate === today) {
+            // Shift & status hari libur harus SAMA-SAMA sudah diisi untuk HARI INI,
+            // baru dianggap lengkap dan langsung di-apply tanpa nanya ulang.
+            if (savedShift && savedDate === today && savedHolidayDate === today) {
                 applyShiftSelection(savedShift);
             } else {
+                // Reset status hari libur kalau tanggalnya beda (hari baru)
+                if (savedHolidayDate !== today) {
+                    localStorage.removeItem("isHolidayCU");
+                    localStorage.removeItem("isHolidayDateCU");
+                }
                 showShiftSelectModal();
             }
 

@@ -137,6 +137,10 @@
     <div class="col-md-3" style="width:49%">
         <form method="post" id="myForm">
             <input type="hidden" id="shiftModeInput" name="ShiftMode" value="" />
+            <input type="hidden"
+                   id="isHolidayInput"
+                   name="IsHoliday"
+                   value="false" />
             <div class="row mt-2 mb-2" style="font-size: 28px; font-weight:500">
                 <label class="col-sm-3 col-form-label" style="width:300px">Scan Serial Number :</label>
                 <div class="col-sm-3 align-self-center">
@@ -211,7 +215,49 @@
         </div>
     </div>
 </div>
+<div class="modal fade"
+     id="HolidaySelectModal"
+     tabindex="-1"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false">
 
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header"
+                 style="background:#180D2F;color:#FFAE11;">
+
+                <h5 class="modal-title">
+                    Status Hari
+                </h5>
+
+            </div>
+
+            <div class="modal-body">
+
+                <p class="text-center mb-3">
+                    Hari ini merupakan:
+                </p>
+
+                <div class="d-grid gap-2">
+
+                    <button class="btn btn-success holiday-select-btn"
+                            data-holiday="false">
+                        Hari Kerja
+                    </button>
+
+                    <button class="btn btn-danger holiday-select-btn"
+                            data-holiday="true">
+                        Hari Libur
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+</div>
 <!-- ============================================================ -->
 <!-- Modal Konfirmasi Akhir Periode - muncul saat periode berakhir -->
 <!-- atau saat tombol submit manual (overtime) dipencet             -->
@@ -372,8 +418,8 @@
             top: 0;
             z-index: 2;
             background: #ffffff !important;
-            color: #bcd6ff !important;
-            font-size: 13px;
+            color: #1565C0 !important;
+            font-size: 14px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -592,6 +638,19 @@
             <!-- ── Serial Hilang — hanya tampil kalau memang ada yang hilang ── -->
             <div id="se-missing-section" style="display:none;">
                 <div class="se-section-label">Serial Hilang</div>
+                <div style="padding:0 22px 10px;">
+
+                    <select id="cs-ms-model-filter"
+                            class="form-select form-select-sm"
+                            style="font-size:14px; color:#0f2a52; font-weight:600; max-width:340px;">
+
+                        <option value="__ALL__">
+                            Semua Model
+                        </option>
+
+                    </select>
+
+                </div>
                 <div class="ms-table-wrap" style="max-height:260px;">
                     <div id="cs-ms-loading" class="ms-loading" style="display:none;">
                         <div class="spinner-border spinner-border-sm me-2" role="status"></div>
@@ -764,9 +823,16 @@ else
         let _csStartTime = '';
         let _csEndTime = '';
         let _csMissingList = [];
+        let _csModelFilter = "__ALL__";
+
+        let _csOverallFirstSerial = "";
+        let _csOverallLastSerial = "";
+
 
         // ===================== SHIFT/PERIODE (popup based) =====================
         var shiftLabels = { "NS": "Non-Shift", "1": "Shift 1", "2": "Shift 2", "3": "Shift 3" };
+                // Status Hari
+        var isHoliday = false;
 
         function getShiftWindow(shiftCode) {
             var now = new Date();
@@ -913,22 +979,127 @@ else
                 if (data.totalToday) document.getElementById("seTotalToday").textContent = data.totalToday;
                 if (data.model) document.getElementById("seModelValue").textContent = data.model;
 
-                _csMissingList = data.serials || [];
-                renderCsMissingTable(_csMissingList);
+                        _csOverallFirstSerial = data.firstSerial || "";
+        _csOverallLastSerial = data.lastSerial || "";
+
+        _csMissingList = data.serials || [];
+
+        populateModelFilter(data.models || []);
+
+        renderCsMissingTable(
+            _csMissingList,
+            _csModelFilter
+        );
+
+        updateSerialFirstLastDisplay();
 
             } catch (err) {
                 setCsMsState('empty');
                 document.getElementById('cs-ms-count-badge').style.display = "none";
             }
         }
+                function populateModelFilter(models){
 
-        function renderCsMissingTable(serials) {
+            const select =
+                document.getElementById(
+                    "cs-ms-model-filter"
+                );
+
+            select.innerHTML =
+                '<option value="__ALL__">Semua Model</option>';
+
+            models.forEach(m=>{
+
+                const opt =
+                    document.createElement("option");
+
+                opt.value =
+                    m.productId;
+
+                opt.textContent =
+                    `${m.productName || m.productId}
+                     (${m.productId}) -
+                     ${m.missingCount} hilang`;
+
+                opt.dataset.firstSerial =
+                    m.firstSerial;
+
+                opt.dataset.lastSerial =
+                    m.lastSerial;
+
+                select.appendChild(opt);
+
+            });
+
+            select.onchange=function(){
+
+                _csModelFilter=this.value;
+
+                renderCsMissingTable(
+                    _csMissingList,
+                    _csModelFilter
+                );
+
+                updateSerialFirstLastDisplay();
+
+            };
+
+        }
+
+        function updateSerialFirstLastDisplay(){
+
+            const first =
+                document.getElementById("seFirstSerial");
+
+            const last =
+                document.getElementById("seLastSerial");
+
+            if(
+                _csModelFilter==="__ALL__"
+            ){
+
+                first.textContent =
+                    _csOverallFirstSerial || "—";
+
+                last.textContent =
+                    _csOverallLastSerial || "—";
+
+                return;
+            }
+
+            const ddl =
+                document.getElementById(
+                    "cs-ms-model-filter"
+                );
+
+            const opt =
+                [...ddl.options]
+                .find(x=>x.value===_csModelFilter);
+
+            first.textContent =
+                opt?.dataset.firstSerial || "—";
+
+            last.textContent =
+                opt?.dataset.lastSerial || "—";
+
+        }
+
+               function renderCsMissingTable(
+            serials,
+            productId="__ALL__"
+        ) {
             const tbody = document.getElementById('cs-ms-tbody');
             const badge = document.getElementById('cs-ms-count-badge');
 
             tbody.innerHTML = '';
 
-            const remaining = serials.filter(s => s !== null);
+            // serials adalah array of { serial, productId } atau null (sudah di-add)
+            let filtered = serials;
+            if (productId !== "__ALL__") {
+                filtered = serials.filter(x => x !== null && x.productId === productId);
+            }
+
+            const remaining = filtered.filter(s => s !== null);
 
             if (remaining.length === 0) {
                 setCsMsState('empty');
@@ -940,16 +1111,22 @@ else
             badge.style.display = "";
             badge.textContent = `${remaining.length} serial hilang`;
 
-            serials.forEach((sn, idx) => {
-                if (sn === null) return; // sudah di-add, skip
+            // Render semua, tapi pakai index dari array GLOBAL _csMissingList
+            // agar addCsSerial bisa null-kan entry yang benar
+            _csMissingList.forEach((item, idx) => {
+                if (item === null) return; // sudah di-add, skip
 
+                // Filter per model jika dipilih
+                if (productId !== "__ALL__" && item.productId !== productId) return;
+
+                const snStr = item.serial;
                 const tr = document.createElement('tr');
                 tr.dataset.idx = idx;
                 tr.innerHTML = `
-                    <td class="td-serial">${sn}</td>
+                    <td class="td-serial">${snStr}</td>
                     <td class="td-action">
                         <button type="button" class="btn-add-serial"
-                                onclick="addCsSerial(this, ${idx}, '${sn}')">
+                                onclick="addCsSerial(this, ${idx}, '${snStr}')">
                             + Add
                         </button>
                     </td>`;
@@ -1126,7 +1303,7 @@ else
 
                 const timeDiffSeconds = Math.floor((now - startOfShift) / 1000);
 
-                const sutVal = @getSUT(currentRecord.Product_Id);
+                const sutVal = @(currentRecord != null ? getSUT(currentRecord.Product_Id) : 0);
                 if (sutVal > 0) {
                     intVal = Math.floor(timeDiffSeconds / sutVal);
 
@@ -1155,25 +1332,63 @@ else
             }
 
             // ===== Inisialisasi popup pilih shift saat page dibuka =====
-            document.querySelectorAll(".shift-select-btn").forEach(function (btn) {
-                btn.addEventListener("click", function () {
-                    var shiftCode = this.getAttribute("data-shift");
-                    applyShiftSelection(shiftCode);
-                    var modalEl = document.getElementById("ShiftSelectModal");
-                    var modalInstance = bootstrap.Modal.getInstance(modalEl);
-                    if (modalInstance) modalInstance.hide();
-                    var serialInput = document.getElementById("serialNum");
-                    if (serialInput) serialInput.focus();
-                });
+                    document.querySelectorAll(".shift-select-btn").forEach(function (btn) {
+
+            btn.addEventListener("click", function () {
+
+                var shiftCode = this.getAttribute("data-shift");
+
+                applyShiftSelection(shiftCode);
+
+                var modalEl = document.getElementById("ShiftSelectModal");
+                var modalInstance = bootstrap.Modal.getInstance(modalEl);
+
+                if (modalInstance)
+                    modalInstance.hide();
+
+                new bootstrap.Modal(
+                    document.getElementById("HolidaySelectModal")
+                ).show();
+
             });
+
+        });
+                document.querySelectorAll(".holiday-select-btn").forEach(function (btn) {
+
+            btn.addEventListener("click", function () {
+
+                isHoliday = this.dataset.holiday === "true";
+
+                document.getElementById("isHolidayInput").value = isHoliday;
+
+                localStorage.setItem("isHolidayCS", isHoliday);
+
+                var modal =
+                    bootstrap.Modal.getInstance(
+                        document.getElementById("HolidaySelectModal")
+                    );
+
+                if (modal)
+                    modal.hide();
+
+                var serialInput = document.getElementById("serialNum");
+
+                if (serialInput)
+                    serialInput.focus();
+
+            });
+
+        });
 
             document.getElementById("confirmShiftEndBtn").addEventListener("click", function () {
                 var endModalEl = document.getElementById("ShiftEndModal");
                 var endModal = bootstrap.Modal.getInstance(endModalEl);
                 if (endModal) endModal.hide();
-                localStorage.removeItem("selectedShiftCS");
-                localStorage.removeItem("selectedShiftDateCS");
-                showShiftSelectModal();
+localStorage.removeItem("selectedShiftCS");
+        localStorage.removeItem("selectedShiftDateCS");
+        localStorage.removeItem("isHolidayCS");
+
+        showShiftSelectModal();
             });
 
             document.getElementById("manualShiftSubmitBtn").addEventListener("click", function () {
@@ -1181,14 +1396,33 @@ else
             });
 
             var savedShift = localStorage.getItem("selectedShiftCS");
+                    var savedHoliday =
+            localStorage.getItem("isHolidayCS");
+
+        if (savedHoliday != null) {
+
+            isHoliday = savedHoliday === "true";
+
+            document.getElementById("isHolidayInput").value =
+                savedHoliday;
+
+        }
             var savedDate = localStorage.getItem("selectedShiftDateCS");
             var today = new Date().toDateString();
 
-            if (savedShift && savedDate === today) {
-                applyShiftSelection(savedShift);
-            } else {
-                showShiftSelectModal();
-            }
+                   if (
+            savedShift &&
+            savedDate === today &&
+            savedHoliday != null
+        ) {
+
+            applyShiftSelection(savedShift);
+
+        } else {
+
+            showShiftSelectModal();
+
+        }
 
             setInterval(checkShiftBoundary, 30000); // cek tiap 30 detik
             setInterval(updateVariable, 900);
